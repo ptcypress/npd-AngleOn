@@ -20,11 +20,11 @@ st.title("Object Velocity vs Pressure — AngleOn™ vs Competitor")
 # Sidebar Controls
 # -------------------------
 st.sidebar.header("Controls")
-st.caption(
-    "This chart compares object velocity on AngleOn™ vs a competitor across applied pressure. "
-    "AngleOn™ moves objects faster under identical conditions, particularly at lower pressures. "
-    "Shaded region quantifies cumulative performance advantage over the chosen pressure window."
-)
+st.caption("""
+Key Talking Points:
+AngleOn™ moves objects faster than competitor product across all object weight/pressure tested with the largest advantage in the lower pressure ranges. 
+Please reference the table for specifics on object details. 
+""")
 
 # Fixed file/path and cubic fit (no upload, no degree slider)
 default_path = "data/velocity_data.csv"
