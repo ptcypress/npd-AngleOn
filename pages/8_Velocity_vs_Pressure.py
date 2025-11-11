@@ -32,13 +32,13 @@ area_to_pressure = st.sidebar.number_input(
 )
 
 show_points = st.sidebar.checkbox("Show raw data points", value=False)  # default OFF
-
-# Theme-ish toggles
 shade_alpha = st.sidebar.slider("Shaded area opacity", 0.0, 1.0, 0.30, 0.05)
-line_width = st.sidebar.slider("Fit line width", 1, 6, 3, 1)
 
 st.sidebar.markdown("---")
 st.sidebar.caption("Tip: Set the window to **0.50 psi** to match your low-pressure comparison.")
+
+# Fixed line width
+line_width = 2
 
 
 # =========================
@@ -92,14 +92,13 @@ if not ok:
     st.error(msg)
     st.stop()
 
+
 # =========================
 # Collapsible Data Table
 # =========================
 with st.expander("Show CSV data / object details", expanded=False):
     col_a, col_b, col_c = st.columns([1.2, 1, 1])
     brush_values = sorted(df["Brush"].dropna().unique().tolist())
-
-    # Default to just AngleOn and Competitor
     default_brushes = [b for b in brush_values if b in ["AngleOn™", "Competitor"]]
 
     with col_a:
@@ -109,7 +108,6 @@ with st.expander("Show CSV data / object details", expanded=False):
             default=default_brushes
         )
     with col_b:
-        # Default sort by Brush if available
         sort_by = st.selectbox(
             "Sort by",
             options=list(df.columns),
@@ -118,10 +116,8 @@ with st.expander("Show CSV data / object details", expanded=False):
     with col_c:
         ascending = st.checkbox("Ascending sort", value=True)
 
-    # Apply filters
     df_view = df[df["Brush"].isin(selected_brushes)].copy() if selected_brushes else df.copy()
 
-    # Quick text search across object-like columns
     q = st.text_input("Quick search (matches text columns)", "")
     if q:
         text_cols = [c for c in df_view.columns if df_view[c].dtype == "object"]
@@ -141,6 +137,7 @@ with st.expander("Show CSV data / object details", expanded=False):
         mime="text/csv"
     )
 
+
 # =========================
 # Prep Data & Fit Models
 # =========================
@@ -156,8 +153,8 @@ y_angleon = angleon["Velocity"].to_numpy()
 x_comp = competitor["Pressure"].to_numpy()
 y_comp = competitor["Velocity"].to_numpy()
 
-f_angleon, poly_obj, model_angleon = fit_poly_model(x_angleon, y_angleon, degree=poly_degree)
-f_comp, _, model_comp = fit_poly_model(x_comp, y_comp, degree=poly_degree)
+f_angleon, _, _ = fit_poly_model(x_angleon, y_angleon, degree=poly_degree)
+f_comp, _, _ = fit_poly_model(x_comp, y_comp, degree=poly_degree)
 
 def diff(x: float) -> float:
     return f_angleon(x) - f_comp(x)
@@ -180,6 +177,7 @@ except Exception:
     else:
         x_intersect = float(min(x_max, 3.08))
 
+
 # =========================
 # Areas & Metrics
 # =========================
@@ -198,6 +196,7 @@ col_m1.metric("Intersection (psi)", f"{x_intersect:.3f}")
 col_m2.metric(f"Advantage Area 0–{to_x:.2f} psi", f"{area_diff_window:.3f} in/sec·psi")
 col_m3.metric(f"Relative Advantage 0–{to_x:.2f} psi", f"{percent_improvement_window:.1f}%")
 col_m4.metric(f"Relative Advantage 0–{cap_x:.2f} psi", f"{percent_improvement_intersect:.1f}%")
+
 
 # =========================
 # Plot
@@ -243,7 +242,6 @@ if cap_x > to_x:
         name=f"Advantage Area (0–{cap_x:.2f} psi)"
     ))
 
-# AngleOn = blue, Competitor = red
 fig.add_trace(go.Scatter(
     x=pressure_range, y=angleon_fit,
     mode="lines",
@@ -259,7 +257,6 @@ fig.add_trace(go.Scatter(
     hovertemplate="Pressure: %{x:.2f} psi<br>Velocity: %{y:.2f} in/sec"
 ))
 
-# Data points (optional)
 if show_points:
     fig.add_trace(go.Scatter(
         x=x_angleon, y=y_angleon,
@@ -272,7 +269,6 @@ if show_points:
         marker=dict(size=8, color="red")
     ))
 
-# Annotation
 fig.add_annotation(
     x=np.clip(to_x, 0, plot_hi),
     y=(np.nanmax(angleon_fit) + np.nanmax(comp_fit)) / 2,
