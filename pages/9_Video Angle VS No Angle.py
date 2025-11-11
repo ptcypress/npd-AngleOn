@@ -17,17 +17,17 @@ video_url = st.sidebar.text_input(
     value="https://youtu.be/Eerrp0QNPqk",
     help="Paste a YouTube or Vimeo link here."
 )
-autoplay = st.sidebar.checkbox("Autoplay (browser-dependent)", value=False)
-loop = st.sidebar.checkbox("Loop", value=False)
+autoplay = st.sidebar.checkbox("Autoplay", value=True)
+loop = st.sidebar.checkbox("Loop", value=True)
 muted = st.sidebar.checkbox("Muted", value=False)
 
 # --- Description / Notes ---
-with st.expander("Test setup & notes", expanded=False):
+with st.expander("Test setup & notes", expanded=True):
     st.markdown(
         """
 - **System:** Older 24” linear vibratory feeder @ 120 VAC  
-- **Brushes:** AngleOn™ vs. Competitor Product 
-- **Observation:** Angled Monofilaments force object direction    
+- **Brushes:** AngleOn™ vs. Non-angled configuration  
+- **Observation:** Angle forces movement direction  
         """
     )
 
@@ -38,4 +38,3 @@ st.video(video_url, autoplay=autoplay, muted=muted, loop=loop)
 st.caption(
     "All testing performed on the same platform as the Velocity vs Pressure study."
 )
-st.page_link("Velocity_vs_Pressure.py", label="⬅️ Back to Velocity vs Pressure", icon="📊")
