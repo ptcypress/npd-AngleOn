@@ -23,9 +23,10 @@ Use the sidebar on the left to navigate between apps:
     -  Product Durability
     -  Velocity Boxplot
     -  Velocity vs Pressure
-   
+    -  Video AngleOn™ vs Ultra Nylon
 ---
 """)
+
 
 
 
