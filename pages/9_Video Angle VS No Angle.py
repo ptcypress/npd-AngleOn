@@ -6,7 +6,7 @@ st.set_page_config(page_title="Video — Angle vs No Angle", layout="wide")
 # --- Header ---
 st.title("Angle vs No Angle — Feeder Demonstration")
 st.caption(
-    "video showing object movement behavior under varying applied pressure. "
+    "Video showing object movement behavior under varying applied pressure on Ultra Nylon and AngleOn™ Product. "
 )
 
 # --- Sidebar Controls ---
