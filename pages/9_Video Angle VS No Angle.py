@@ -24,7 +24,7 @@ muted = st.sidebar.checkbox("Muted", value=False)
 with st.expander("Test setup & notes", expanded=True):
     st.markdown(
         """
-- **System:** Older 24” linear vibratory feeder @ 120 VAC  
+- **System:** 36” linear vibratory feeder @ 120 VAC  
 - **Brushes:** AngleOn™ vs. Non-angled configuration  
 - **Observation:** Angle forces movement direction  
         """
