@@ -21,13 +21,11 @@ st.title("Object Velocity vs Pressure — AngleOn™ vs Competitor")
 # -------------------------
 st.sidebar.header("Controls")
 
-uploaded = st.sidebar.file_uploader("Upload velocity_data.csv", type=["csv"])
+# Fixed file/path and cubic fit (no upload, no degree slider)
 default_path = "data/velocity_data.csv"
-use_default = st.sidebar.checkbox("Use default path", value=not bool(uploaded))
+csv_path = default_path
+poly_degree = 3  # cubic
 
-csv_path = default_path if use_default else None
-
-poly_degree = st.sidebar.select_slider("Polynomial degree", options=[2, 3, 4], value=3)
 area_to_pressure = st.sidebar.number_input(
     "Pressure window for relative advantage (psi)",
     min_value=0.00, max_value=100.00, value=0.50, step=0.05, format="%.2f"
@@ -47,9 +45,7 @@ st.sidebar.caption("Tip: Set the window to **0.50 psi** to match your low-pressu
 # Helpers
 # =========================
 
-def load_csv(_uploaded, _path: str) -> pd.DataFrame | None:
-    if _uploaded is not None:
-        return pd.read_csv(_uploaded)
+def load_csv(_path: str) -> pd.DataFrame | None:
     if _path and os.path.exists(_path):
         return pd.read_csv(_path)
     return None
@@ -66,7 +62,6 @@ def fit_poly_model(x: np.ndarray, y: np.ndarray, degree: int):
     poly = PolynomialFeatures(degree=degree)
     X_poly = poly.fit_transform(x.reshape(-1, 1))
     model = LinearRegression().fit(X_poly, y)
-    # return callable plus transformer so we can reuse easily
     def f(x_scalar: float) -> float:
         return float(model.predict(poly.transform(np.array([[x_scalar]])))[0])
     return f, poly, model
@@ -83,13 +78,10 @@ def safe_quad(func, a: float, b: float) -> float:
 # =========================
 # Data Load
 # =========================
-df = load_csv(uploaded, csv_path)
+df = load_csv(csv_path)
 
 if df is None:
-    st.error(
-        "No CSV found. Upload a file in the sidebar or enable **Use default path** "
-        f"(expects `{default_path}`)."
-    )
+    st.error(f"No CSV found at `{csv_path}`. Please place your file there.")
     st.stop()
 
 # Standardize columns
@@ -160,7 +152,7 @@ y_angleon = angleon["Velocity"].to_numpy()
 x_comp = competitor["Pressure"].to_numpy()
 y_comp = competitor["Velocity"].to_numpy()
 
-# Fit
+# Fit (fixed cubic)
 f_angleon, poly_obj, model_angleon = fit_poly_model(x_angleon, y_angleon, degree=poly_degree)
 f_comp, _, model_comp = fit_poly_model(x_comp, y_comp, degree=poly_degree)
 
@@ -168,18 +160,15 @@ def diff(x: float) -> float:
     return f_angleon(x) - f_comp(x)
 
 # Try to find the first intersection near the low-pressure region
-# We attempt a bracket around the observed range to be robust
 x_min = float(max(0.0, min(x_angleon.min(), x_comp.min()) - 0.2))
 x_max = float(max(x_angleon.max(), x_comp.max()) + 0.2)
 x0_guess = 1.0 if x_min <= 1.0 <= x_max else (x_min + x_max) / 2
 
 try:
     x_intersect = float(fsolve(diff, x0=x0_guess)[0])
-    # If it's wildly outside our observed region, ignore it
     if not (x_min - 1.0 <= x_intersect <= x_max + 1.0):
         raise ValueError("Intersection out of range")
 except Exception:
-    # Fallback: estimate by scanning a dense grid for sign change
     grid = np.linspace(x_min, x_max, 1000)
     vals = [diff(x) for x in grid]
     sign_changes = np.where(np.sign(vals[:-1]) != np.sign(vals[1:]))[0]
@@ -187,8 +176,7 @@ except Exception:
         i = sign_changes[0]
         x_intersect = float((grid[i] + grid[i + 1]) / 2)
     else:
-        # Final fallback: no intersection — set to max observed
-        x_intersect = float(min(x_max, 3.08))  # keep your old fallback flavor
+        x_intersect = float(min(x_max, 3.08))
 
 # =========================
 # Areas & Metrics
@@ -215,14 +203,12 @@ col_m4.metric(f"Relative Advantage 0–{cap_x:.2f} psi", f"{percent_improvement_
 # =========================
 # Plot
 # =========================
-# Smooth range that covers from 0 to a bit beyond the intersection and observed max
 plot_hi = float(max(cap_x + 0.5, x_max))
 pressure_range = np.linspace(0.0, plot_hi, 400)
 
 angleon_fit = np.array([f_angleon(x) for x in pressure_range])
 comp_fit = np.array([f_comp(x) for x in pressure_range])
 
-# Build shaded polygons
 def make_fill_between(x, y1, y2, limit):
     mask = x <= limit
     x_m = x[mask]
@@ -248,7 +234,7 @@ fig.add_trace(go.Scatter(
     name=f"Advantage Area (0–{to_x:.2f} psi)"
 ))
 
-# Optional: show the broader area to intersection in lighter shade (if larger than window)
+# Optional: broader area to intersection in lighter shade
 if cap_x > to_x:
     fig.add_trace(go.Scatter(
         x=x_fill_intersect,
@@ -260,12 +246,12 @@ if cap_x > to_x:
         name=f"Advantage Area (0–{cap_x:.2f} psi)"
     ))
 
-# Fit lines
+# Fit lines (AngleOn = blue)
 fig.add_trace(go.Scatter(
     x=pressure_range, y=angleon_fit,
     mode="lines",
     name="AngleOn™ cubic fit",
-    line=dict(width=line_width),
+    line=dict(width=line_width, color="blue"),
     hovertemplate="Pressure: %{x:.2f} psi<br>Velocity: %{y:.2f} in/sec"
 ))
 
@@ -273,7 +259,7 @@ fig.add_trace(go.Scatter(
     x=pressure_range, y=comp_fit,
     mode="lines",
     name="Competitor cubic fit",
-    line=dict(width=line_width),
+    line=dict(width=line_width, color="red"),
     hovertemplate="Pressure: %{x:.2f} psi<br>Velocity: %{y:.2f} in/sec"
 ))
 
@@ -282,11 +268,13 @@ if show_points:
     fig.add_trace(go.Scatter(
         x=x_angleon, y=y_angleon,
         mode="markers", name="AngleOn™ data",
+        marker=dict(size=8, color="blue"),
         hovertemplate="Pressure: %{x:.2f} psi<br>Velocity: %{y:.2f} in/sec"
     ))
     fig.add_trace(go.Scatter(
         x=x_comp, y=y_comp,
         mode="markers", name="Competitor data",
+        marker=dict(size=8, color="red"),
         hovertemplate="Pressure: %{x:.2f} psi<br>Velocity: %{y:.2f} in/sec"
     ))
 
