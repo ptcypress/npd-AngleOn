@@ -137,6 +137,8 @@ else:
             )
         )
 
-        st.caption("""This chart compares the velocity output of AngleOn™ and Competitor product for a range of pressures exerted by different objects on each brush type. 
+        st.caption("""This chart compares the velocity output of AngleOn™ and Competitor product for a range of pressures exerted by different objects on each brush type. Key take away is AngleOn™
+        out performs competitor product throughout especially at lower pressures (lower object weight ex. Nuts, Bolts, Washers, etc.). For both products, once objects exerted approx. 3 lbs/in², the 
+        feeder coil could no longer generate the force required for movement.
         The shaded area quantifies cumulative performance advantage.""")
         st.plotly_chart(fig, use_container_width=True)
