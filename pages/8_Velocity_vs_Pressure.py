@@ -99,20 +99,29 @@ with st.expander("Show CSV data / object details", expanded=False):
     col_a, col_b, col_c = st.columns([1.2, 1, 1])
     brush_values = sorted(df["Brush"].dropna().unique().tolist())
 
+    # Default to just AngleOn and Competitor
+    default_brushes = [b for b in brush_values if b in ["AngleOn™", "Competitor"]]
+
     with col_a:
         selected_brushes = st.multiselect(
-            "Filter: Brush", options=brush_values, default=brush_values
+            "Filter: Brush",
+            options=brush_values,
+            default=default_brushes
         )
     with col_b:
+        # Default sort by Brush if available
         sort_by = st.selectbox(
-            "Sort by", options=list(df.columns),
-            index=list(df.columns).index("Pressure") if "Pressure" in df.columns else 0
+            "Sort by",
+            options=list(df.columns),
+            index=list(df.columns).index("Brush") if "Brush" in df.columns else 0
         )
     with col_c:
         ascending = st.checkbox("Ascending sort", value=True)
 
+    # Apply filters
     df_view = df[df["Brush"].isin(selected_brushes)].copy() if selected_brushes else df.copy()
 
+    # Quick text search across object-like columns
     q = st.text_input("Quick search (matches text columns)", "")
     if q:
         text_cols = [c for c in df_view.columns if df_view[c].dtype == "object"]
