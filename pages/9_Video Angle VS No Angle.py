@@ -6,8 +6,7 @@ st.set_page_config(page_title="Video — Angle vs No Angle", layout="wide")
 # --- Header ---
 st.title("Angle vs No Angle — Feeder Demonstration")
 st.caption(
-    "Clip showing object transport behavior under varying applied pressure. "
-    "Pairs with the **Velocity vs Pressure** analysis page."
+    "video showing object movement behavior under varying applied pressure. "
 )
 
 # --- Sidebar Controls ---
@@ -35,6 +34,6 @@ with st.expander("Test setup & notes", expanded=True):
 st.video(video_url, autoplay=autoplay, muted=muted, loop=loop)
 
 # --- Footer ---
-st.caption(
-    "All testing performed on the same platform as the Velocity vs Pressure study."
-)
+#st.caption(
+    #"All testing performed on the same platform as the Velocity vs Pressure study."
+#)
