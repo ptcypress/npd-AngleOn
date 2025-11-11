@@ -20,6 +20,11 @@ st.title("Object Velocity vs Pressure — AngleOn™ vs Competitor")
 # Sidebar Controls
 # -------------------------
 st.sidebar.header("Controls")
+st.caption(
+    "This chart compares object velocity on AngleOn™ vs a competitor across applied pressure. "
+    "AngleOn™ moves objects faster under identical conditions, particularly at lower pressures. "
+    "Shaded region quantifies cumulative performance advantage over the chosen pressure window."
+)
 
 # Fixed file/path and cubic fit (no upload, no degree slider)
 default_path = "data/velocity_data.csv"
@@ -299,8 +304,4 @@ fig.update_layout(
 
 st.plotly_chart(fig, use_container_width=True)
 
-st.caption(
-    "This chart compares object velocity on AngleOn™ vs a competitor across applied pressure. "
-    "AngleOn™ moves objects faster under identical conditions, particularly at lower pressures. "
-    "Shaded region quantifies cumulative performance advantage over the chosen pressure window."
-)
+
