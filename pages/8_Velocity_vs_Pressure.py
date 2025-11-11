@@ -31,7 +31,7 @@ area_to_pressure = st.sidebar.number_input(
     min_value=0.00, max_value=100.00, value=0.50, step=0.05, format="%.2f"
 )
 
-show_points = st.sidebar.checkbox("Show raw data points", value=True)
+show_points = st.sidebar.checkbox("Show raw data points", value=False)  # default OFF
 
 # Theme-ish toggles
 shade_alpha = st.sidebar.slider("Shaded area opacity", 0.0, 1.0, 0.30, 0.05)
@@ -96,7 +96,6 @@ if not ok:
 # Collapsible Data Table
 # =========================
 with st.expander("Show CSV data / object details", expanded=False):
-    # Filters
     col_a, col_b, col_c = st.columns([1.2, 1, 1])
     brush_values = sorted(df["Brush"].dropna().unique().tolist())
 
@@ -112,10 +111,8 @@ with st.expander("Show CSV data / object details", expanded=False):
     with col_c:
         ascending = st.checkbox("Ascending sort", value=True)
 
-    # Apply
     df_view = df[df["Brush"].isin(selected_brushes)].copy() if selected_brushes else df.copy()
 
-    # Quick text search across object-like columns
     q = st.text_input("Quick search (matches text columns)", "")
     if q:
         text_cols = [c for c in df_view.columns if df_view[c].dtype == "object"]
@@ -138,7 +135,6 @@ with st.expander("Show CSV data / object details", expanded=False):
 # =========================
 # Prep Data & Fit Models
 # =========================
-# Keep just the two series we care about
 angleon = df[df["Brush"].str.strip() == "AngleOn™"].copy()
 competitor = df[df["Brush"].str.strip() == "Competitor"].copy()
 
@@ -148,18 +144,15 @@ if angleon.empty or competitor.empty:
 
 x_angleon = angleon["Pressure"].to_numpy()
 y_angleon = angleon["Velocity"].to_numpy()
-
 x_comp = competitor["Pressure"].to_numpy()
 y_comp = competitor["Velocity"].to_numpy()
 
-# Fit (fixed cubic)
 f_angleon, poly_obj, model_angleon = fit_poly_model(x_angleon, y_angleon, degree=poly_degree)
 f_comp, _, model_comp = fit_poly_model(x_comp, y_comp, degree=poly_degree)
 
 def diff(x: float) -> float:
     return f_angleon(x) - f_comp(x)
 
-# Try to find the first intersection near the low-pressure region
 x_min = float(max(0.0, min(x_angleon.min(), x_comp.min()) - 0.2))
 x_max = float(max(x_angleon.max(), x_comp.max()) + 0.2)
 x0_guess = 1.0 if x_min <= 1.0 <= x_max else (x_min + x_max) / 2
@@ -181,14 +174,11 @@ except Exception:
 # =========================
 # Areas & Metrics
 # =========================
-# 1) Relative advantage up to the user-chosen window (default 0.50 psi)
 to_x = float(area_to_pressure)
-
 area_diff_window = safe_quad(diff, 0.0, to_x)
 area_comp_window = safe_quad(lambda _x: f_comp(_x), 0.0, to_x)
 percent_improvement_window = (area_diff_window / area_comp_window * 100.0) if area_comp_window != 0 else 0.0
 
-# 2) Also compute up to intersection (for context)
 cap_x = float(max(0.0, min(x_intersect, x_max)))
 area_diff_intersect = safe_quad(diff, 0.0, cap_x)
 area_comp_intersect = safe_quad(lambda _x: f_comp(_x), 0.0, cap_x)
@@ -223,7 +213,6 @@ x_fill_intersect, y_fill_intersect = make_fill_between(pressure_range, angleon_f
 
 fig = go.Figure()
 
-# Shaded area 1: up to user window
 fig.add_trace(go.Scatter(
     x=x_fill_window,
     y=y_fill_window,
@@ -234,7 +223,6 @@ fig.add_trace(go.Scatter(
     name=f"Advantage Area (0–{to_x:.2f} psi)"
 ))
 
-# Optional: broader area to intersection in lighter shade
 if cap_x > to_x:
     fig.add_trace(go.Scatter(
         x=x_fill_intersect,
@@ -246,7 +234,7 @@ if cap_x > to_x:
         name=f"Advantage Area (0–{cap_x:.2f} psi)"
     ))
 
-# Fit lines (AngleOn = blue)
+# AngleOn = blue, Competitor = red
 fig.add_trace(go.Scatter(
     x=pressure_range, y=angleon_fit,
     mode="lines",
@@ -254,7 +242,6 @@ fig.add_trace(go.Scatter(
     line=dict(width=line_width, color="blue"),
     hovertemplate="Pressure: %{x:.2f} psi<br>Velocity: %{y:.2f} in/sec"
 ))
-
 fig.add_trace(go.Scatter(
     x=pressure_range, y=comp_fit,
     mode="lines",
@@ -268,14 +255,12 @@ if show_points:
     fig.add_trace(go.Scatter(
         x=x_angleon, y=y_angleon,
         mode="markers", name="AngleOn™ data",
-        marker=dict(size=8, color="blue"),
-        hovertemplate="Pressure: %{x:.2f} psi<br>Velocity: %{y:.2f} in/sec"
+        marker=dict(size=8, color="blue")
     ))
     fig.add_trace(go.Scatter(
         x=x_comp, y=y_comp,
         mode="markers", name="Competitor data",
-        marker=dict(size=8, color="red"),
-        hovertemplate="Pressure: %{x:.2f} psi<br>Velocity: %{y:.2f} in/sec"
+        marker=dict(size=8, color="red")
     ))
 
 # Annotation
