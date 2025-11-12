@@ -10,7 +10,7 @@ st.title("Object Velocity Distribution by Brush Type")
 st.caption("""
 Key Points:    
 This boxplot shows the distribution of velocity measurements of all objects tested across different brush types. Each box represents the spread of velocity 
-measurements for that particular brush including individual data points. Use this to compare consistency and central tendency across brush types. AngleOn™ out performs Competitor product.
+measurements for that particular brush including individual data points. Use this to compare consistency and central tendency across brush types. **AngleOn™ out performs Competitor product**.
 """)
 
 # Load the CSV file
