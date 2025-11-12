@@ -18,7 +18,7 @@ st.title("Pile Pullout — AngleOn™")
 st.caption("""
 Key Points:    
 INSTRON pile pull testing of AngleOn™ raw material.
--**Average Max Load:  33.02lbF | Average Displacement @ Max Load:  0.121in**  
+**Average Max Load:  33.02lbF | Average Displacement @ Max Load:  0.121in**  
 """)
 
 # ---------------------------
