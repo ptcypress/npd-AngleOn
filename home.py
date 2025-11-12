@@ -15,6 +15,7 @@ Use the sidebar on the left to navigate between apps:
 
 -  **Physical Characteristics:**
     -  Pile Pullout Testing
+    -  Tensile Testing
     -  Angle Decay
     -  Decibel Measurements
     -  Monofilament Coverage
@@ -27,6 +28,7 @@ Use the sidebar on the left to navigate between apps:
     -  Video AngleOn™ vs UltraNylon
 ---
 """)
+
 
 
 
