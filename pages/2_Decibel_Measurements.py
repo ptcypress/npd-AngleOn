@@ -7,7 +7,10 @@ st.set_page_config(page_title="Decibel Measurements", layout="wide")
 
 # --- Title ---
 st.title("Decibel Measurements")
-st.caption("Use the sidebar to add/remove brush types.")
+st.caption("""Key Points: 
+AngleOn™ decibel measurements are comparable to competitor product. For all brush types, (25) 1/2"-13 nuts were run in linear feeder. 
+Ambient = Shop Noise | Empty Feeder = Feeder running without objects | Full Feeder = Feeder running objects without brush
+""")
 
 # --- Read CSV ---
 CSV_PATH = "data/decibel_measurements.csv"
