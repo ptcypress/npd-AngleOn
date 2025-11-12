@@ -16,10 +16,10 @@ import streamlit as st
 st.set_page_config(page_title="N6 Belt — Tensile Pulls", layout="wide")
 st.title("Tensile Testing — AngleOn™")
 st.caption("""
-Key Points: 
-INSTRON tensile testing of AngleOn™ raw material.
--**Average Max Load:                   (Exceeded test parameters)**
--**Average Displacement @ Max Load:    0.937in** 
+Key Points:   
+INSTRON tensile testing of AngleOn™ raw material.  
+-**Average Max Load:                   (Exceeded test parameters)**  
+-**Average Displacement @ Max Load:    0.937in**   
 """)
 
 # ---------------------------
