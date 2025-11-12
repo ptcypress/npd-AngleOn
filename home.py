@@ -6,7 +6,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("New Product Development - AngleOn™ & AngleOn XT")
+st.title("Ultrafab New Product Development - AngleOn™ & AngleOn XT")
 st.markdown("---")
 
 st.markdown("""
@@ -23,9 +23,10 @@ Use the sidebar on the left to navigate between apps:
     -  Product Durability
     -  Velocity Boxplot
     -  Velocity vs Mass & Pressure
-    -  Video AngleOn™ vs Ultra Nylon
+    -  Video AngleOn™ vs UltraNylon
 ---
 """)
+
 
 
 
