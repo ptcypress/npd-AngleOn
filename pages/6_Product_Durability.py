@@ -137,7 +137,7 @@ else:
         # Text below chart
         st.caption("""
         Key Points:    
-        This chart shows estimated material loss (%) of AngleOn™ and Competitor products over time (hrs). AngleOn™ demonstrates superior durability under identical wear conditions. 
+        This chart shows estimated material loss (%) of AngleOn™ and Competitor products over time (hrs). AngleOn™ demonstrates superior durability under identical wear conditions (approx. 10% more durable). 
         Calculated runtime hours is an extrapolation of data gathered from accelerated wear test combined with real-time longevity material loss measurements. Assumption: AngleOn™ demonstrates 
         greater durability simply due to the fact there is more material per unit area to be removed in comparison to Competitor product (Reference Monofilament Density page for more detail).
         """)
