@@ -14,10 +14,10 @@ import streamlit as st
 # Page Setup
 # ---------------------------
 st.set_page_config(page_title="Pile Pull Results", layout="wide")
-st.title("Tensile Testing — AngleOn™")
+st.title("Pile Pullout — AngleOn™")
 st.caption("""
 Key Points:    
-INSTRON Tensile testing of AngleOn™ raw material.    
+INSTRON pile pull testing of AngleOn™ raw material.    
 -**Average Max Load:                   33.02lbF**    
 -**Average Displacement @ Max Load:    0.121in**  
 """)
