@@ -205,10 +205,39 @@ fig.update_layout(
     yaxis_title="Velocity (in/sec)",
     height=650,
     hovermode="x",
-    legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.72),
-    xaxis=dict(showspikes=True, spikemode="across", spikesnap="cursor"),
-    yaxis=dict(showspikes=True, spikemode="across", spikesnap="cursor"),
+    legend=dict(
+        yanchor="top", y=0.99,
+        xanchor="left", x=0.72
+    ),
+    xaxis=dict(
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        showline=True,
+        spikecolor="lightgray",
+        spikethickness=0.7,
+        spikedash="dot",
+        showgrid=True,
+        gridcolor="rgba(220,220,220,0.4)"
+    ),
+    yaxis=dict(
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        showline=True,
+        spikecolor="lightgray",
+        spikethickness=0.7,
+        spikedash="dot",
+        showgrid=True,
+        gridcolor="rgba(220,220,220,0.4)"
+    ),
+    hoverlabel=dict(
+        bgcolor="rgba(0,0,0,0)",
+        font_size=12,
+        font_family="Arial"
+    )
 )
+
 
 st.plotly_chart(fig, use_container_width=True)
 
