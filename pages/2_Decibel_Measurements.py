@@ -8,7 +8,7 @@ st.set_page_config(page_title="Decibel Measurements", layout="wide")
 # --- Title ---
 st.title("Decibel Measurements")
 st.caption("""Key Points:    
-AngleOn™ decibel measurements are comparable to competitor product. For all brush types, objects run were (25) 1/2"-13 nuts.  
+**AngleOn™ decibel measurements are comparable to competitor product**. For all brush types, objects run were (25) 1/2"-13 nuts.  
 (Ambient = Shop Noise | Empty Feeder = Feeder running without objects | Full Feeder = Feeder running objects without brush)
 """)
 
