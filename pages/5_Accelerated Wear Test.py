@@ -50,10 +50,10 @@ st.title("Accelerated Wear Test - AngleOn™ vs. Competitor")
 
 # Explanatory text
 st.caption("""
-This chart compares the **rate of material loss** across belt speeds for AngleOn™ and Competitor product.
-The shaded area between the curves, from **6.3 to 50 in/sec**, represents the **cumulative durability advantage** of one material over the other.
-Lower material loss indicates superior wear resistance under accelerated wear conditions. Accelerated wear test designed to mimic real-use testing 
-applied forces. Modified belt sander fixture (220-grit) was used.
+Key Points:    This chart represents material loss for both AngleOn™ and Competitor product using Ultrafab's accelerated wear test stand. The test 
+stand is designed to simulate material wear given an applied force per unit area with variable speed belt sander (220-grit). The shaded area between the curves, 
+from 6.3 to 50 in/sec, represents the cumulative durability advantage of one material over the other. Lower material loss indicates superior wear resistance under 
+accelerated wear conditions. AngleOn™ out performs Competitor product.
 """)
 
 # Plot
