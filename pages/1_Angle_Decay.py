@@ -96,7 +96,8 @@ def stabilization_time(A: float, k: float, C: float, y0: float, eps_deg: float) 
 # Sidebar controls
 # ---------------------------
 st.title("Angle Decay - AngleOn™")
-st.caption("""Angle measurements were recorded over the course of a month and a half. A slight 
+st.caption("""Key Points:    
+AngleOn™ angle measurements were recorded over time. A slight 
 relaxation in monofilament angle was observed. The plot below shows all observed measurements, 
 and an exponential regression fit with projection. An estimated angle and stabilization date is 
 included below.""")
