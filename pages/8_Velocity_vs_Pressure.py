@@ -1,6 +1,4 @@
 import os
-from typing import Optional
-
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -100,7 +98,7 @@ if not ok:
 
 
 # =========================
-# Sidebar Controls (needs df for options)
+# Sidebar Controls (needs df)
 # =========================
 st.sidebar.header("Controls")
 
@@ -205,18 +203,17 @@ def diff(x: float) -> float:
 
 
 # =========================
-# Window slider (defaults to the FULL overlap)
+# Free Range Selection (low & high) — allows single-point
 # =========================
-full_range = float(xmax_common - xmin_common)
-# Reasonable step: 1% of range (fall back to small positive)
-step_val = max(full_range / 100.0, 0.01)
-
 st.sidebar.markdown("---")
-area_width = st.sidebar.slider(
-    f"Shaded window width ({x_units})",
-    min_value=0.0,
-    max_value=float(full_range),
-    value=float(full_range),   # default = FULL RANGE
+full_range = float(xmax_common - xmin_common)
+step_val = max(full_range / 200.0, 0.001)  # smooth control
+
+low_val, high_val = st.sidebar.slider(
+    f"Analysis range ({x_units})",
+    min_value=float(xmin_common),
+    max_value=float(xmax_common),
+    value=(float(xmin_common), float(xmax_common)),  # defaults to full overlap
     step=float(step_val)
 )
 
@@ -225,27 +222,24 @@ shade_alpha = st.sidebar.slider("Shaded area opacity", 0.0, 1.0, 0.30, 0.05)
 
 
 # =========================
-# Relative Advantage (window anchored at overlap min)
+# Relative / Point Advantage
 # =========================
-win_start = xmin_common
-win_end   = min(xmin_common + float(area_width), xmax_common)
-
-if win_end <= win_start + 1e-9:
-    area_diff_window = 0.0
-    area_comp_window = 0.0
+if abs(high_val - low_val) <= 1e-12:
+    # Single-point advantage at x0
+    x0 = float(low_val)
+    fa = f_angleon_c(x0)
+    fc = f_comp_c(x0)
+    point_advantage = (fa - fc) / fc * 100.0 if fc != 0 else np.nan
+    title = f"Point Advantage at {x0:.2f} {x_units}"
+    value_str = f"{point_advantage:.1f}%" if np.isfinite(point_advantage) else "—"
+    st.metric(title, value_str)
 else:
-    area_diff_window = safe_quad(diff, win_start, win_end)
-    area_comp_window = safe_quad(lambda _x: f_comp_c(_x), win_start, win_end)
-
-relative_advantage = (
-    (area_diff_window / area_comp_window * 100.0) if area_comp_window != 0 else 0.0
-)
-
-# Single metric only
-st.metric(
-    f"Relative Advantage [{win_start:.2f}–{win_end:.2f}] {x_units}",
-    f"{relative_advantage:.1f}%"
-)
+    # Interval-based relative advantage
+    lo, hi = float(min(low_val, high_val)), float(max(low_val, high_val))
+    area_diff = safe_quad(diff, lo, hi)
+    area_comp = safe_quad(lambda _x: f_comp_c(_x), lo, hi)
+    rel_adv = (area_diff / area_comp * 100.0) if area_comp != 0 else 0.0
+    st.metric(f"Relative Advantage [{lo:.2f}–{hi:.2f}] {x_units}", f"{rel_adv:.1f}%")
 
 
 # =========================
@@ -265,18 +259,31 @@ def make_fill_between(x, y1, y2, a, b):
     yf = np.concatenate([y1m, y2m[::-1]])
     return xf, yf
 
-x_fill_window, y_fill_window = make_fill_between(x_range, angleon_fit, comp_fit, win_start, win_end)
-
 fig = go.Figure()
 
-# Shaded window (defaults to full overlap)
-if x_fill_window.size:
+# Shaded interval or point indicator
+if abs(high_val - low_val) <= 1e-12:
+    # draw a small marker at the mid value between the two fits
+    x0 = float(low_val)
+    y_mid = (f_angleon_c(x0) + f_comp_c(x0)) / 2.0
     fig.add_trace(go.Scatter(
-        x=x_fill_window, y=y_fill_window,
-        fill="toself", fillcolor=f"rgba(150,150,150,{shade_alpha})",
-        line=dict(color="rgba(0,0,0,0)"), hoverinfo="skip",
-        name=f"Shaded window [{win_start:.2f}–{win_end:.2f}] {x_units}"
+        x=[x0], y=[y_mid],
+        mode="markers",
+        name=f"Point @ {x0:.2f} {x_units}",
+        marker=dict(size=10),
+        hoverinfo="skip"
     ))
+else:
+    xf, yf = make_fill_between(x_range, angleon_fit, comp_fit, float(min(low_val, high_val)), float(max(low_val, high_val)))
+    if xf.size:
+        fig.add_trace(go.Scatter(
+            x=xf, y=yf,
+            fill="toself",
+            fillcolor=f"rgba(150,150,150,{shade_alpha})",
+            line=dict(color="rgba(0,0,0,0)"),
+            hoverinfo="skip",
+            name=f"Analysis window"
+        ))
 
 # Model lines (hovertemplate braces fixed)
 fig.add_trace(go.Scatter(
@@ -310,16 +317,6 @@ if show_points:
             mode="markers", name="Competitor data",
             marker=dict(size=8, color="red")
         ))
-
-# Optional annotation (relative advantage only)
-if x_fill_window.size:
-    fig.add_annotation(
-        x=float(win_end),
-        y=float((np.nanmax(angleon_fit) + np.nanmax(comp_fit)) / 2),
-        text=(f"Relative Advantage [{win_start:.2f}–{win_end:.2f}] {x_units}"
-              f"<br>{relative_advantage:.1f}%"),
-        showarrow=False
-    )
 
 fig.update_layout(
     xaxis_title=f"{x_col} ({x_units})",
