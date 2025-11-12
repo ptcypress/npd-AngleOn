@@ -50,7 +50,6 @@ if not numeric_cols:
 
 # --- Select which columns to show ---
 REQUIRED = ["Ambient", "Empty Feeder", "Full Feeder"]
-# Only keep those that actually exist & are numeric
 required_present = [c for c in REQUIRED if c in numeric_cols]
 
 # Optional pool = all other numeric series
@@ -67,11 +66,10 @@ def sort_key(name: str):
 
 optional_pool_sorted = sorted(optional_pool, key=sort_key)
 
-# Define defaults: only show AngleOn and Competitor initially (if present)
-default_names = {"AngleOn", "Competitor"}
-default_optional = [c for c in optional_pool_sorted if c in default_names]
+# Default to both AngleOn and Competitor if present
+default_optional = [c for c in optional_pool_sorted if c in ["AngleOn", "Competitor"]]
 
-# Sidebar multiselect to choose optional series; default to AngleOn + Competitor only
+# Sidebar selection
 selected_optional = st.sidebar.multiselect(
     "Optional series",
     options=optional_pool_sorted,
@@ -89,7 +87,7 @@ for col in required_present:
 for col in selected_optional:
     fig.add_trace(go.Scatter(x=x, y=df[col], mode="lines", name=col))
 
-# OSHA TWA Action Level line at 85 dBA (legend-visible)
+# OSHA TWA Action Level line at 85 dBA
 if len(df) > 0:
     if hasattr(x, "iloc"):
         x0, x1 = x.iloc[0], x.iloc[-1]
