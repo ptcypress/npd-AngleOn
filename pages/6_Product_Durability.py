@@ -135,8 +135,10 @@ else:
         )
 
         # Text below chart
-        st.caption(
-            "This chart shows the cumulative **material loss (%)** of AngleOn™ and Competitor products over runtime. "
-            "Lower values indicate greater durability."
-        )
+        st.caption("""
+        Key Points:    
+        This chart shows estimated material loss (%) of AngleOn™ and Competitor products over time (hrs). AngleOn™ demonstrates superior durability under identical wear conditions. 
+        Calculated runtime hours is an extrapolation of data gathered from accelerated wear test combined with real-time longevity material loss measurements. Assumption: AngleOn™ demonstrates 
+        greater durability simply due to the fact there is more material per unit area to be removed in comparison to Competitor product (Reference Monofilament Density page for more detail).
+        """)
         st.plotly_chart(fig, use_container_width=True)
