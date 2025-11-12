@@ -17,7 +17,7 @@ material densities & monofilament diameters. Use sliders in side panel to explor
 """)
 
 # Sidebar controls
-st.sidebar.header("EPI² Values (ends per inch squared)")
+st.sidebar.header("EPI² Values")
 epi_inputs = {
     "Competitor": st.sidebar.slider("Competitor", min_value=1_000, max_value=15_000, value=9_750, step=10),
     "AngleOn™": st.sidebar.slider("AngleOn™", min_value=1_000, max_value=15_000, value=6_910, step=10),
