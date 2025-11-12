@@ -22,7 +22,7 @@ with st.expander("Test setup & notes", expanded=True):
     st.markdown(
         """
 - **System:** 36” linear vibratory feeder @ 120 VAC  
-- **Brushes:** AngleOn™ vs. Non-angled configuration  
+- **Brushes:** AngleOn™ vs. UltraNylon Non-angled configuration  
 - **Observation:** Angle forces movement direction  
         """
     )
