@@ -12,7 +12,7 @@ from scipy.integrate import quad
 # Streamlit Page Setup
 # =========================
 st.set_page_config(page_title="Velocity vs Mass & Pressure", layout="wide")
-st.title("Object Velocity vs Pressure — AngleOn™ vs Competitor")
+st.title("Object Velocity vs Mass & Pressure — AngleOn™ vs Competitor")
 
 st.caption("""
 Key Points:    
