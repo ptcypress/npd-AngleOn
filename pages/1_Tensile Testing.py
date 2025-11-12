@@ -16,8 +16,8 @@ st.set_page_config(page_title="Pile Pull Results", layout="wide")
 st.title("Tensile Testing — AngleOn™")
 st.caption("""
 Key Points:  
-INSTRON Tensile testing for AngleOn™ raw material.
--**Average Max Load:                   33.02lbF**
+INSTRON Tensile testing for AngleOn™ raw material.  
+-**Average Max Load:                   33.02lbF**  
 -**Average Displacement @ Max Load:    0.121in**   
 """)
 
