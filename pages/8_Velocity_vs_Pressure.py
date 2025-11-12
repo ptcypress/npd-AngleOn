@@ -1,4 +1,6 @@
 import os
+from typing import Optional
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -7,7 +9,7 @@ import plotly.graph_objects as go
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from scipy.integrate import quad
-from scipy.optimize import fsolve
+from scipy.optimize import fsolve, brentq
 
 
 # =========================
@@ -60,6 +62,38 @@ def safe_quad(func, a: float, b: float) -> float:
     lo, hi = min(a, b), max(a, b)
     val, _ = quad(func, lo, hi)
     return val
+
+
+def common_domain(x1: np.ndarray, x2: np.ndarray) -> tuple[float, float]:
+    """Compute overlapping domain between two x arrays; raise if none."""
+    xmin = float(max(np.nanmin(x1), np.nanmin(x2)))
+    xmax = float(min(np.nanmax(x1), np.nanmax(x2)))
+    if xmax < xmin:
+        raise ValueError("No overlapping domain between AngleOn™ and Competitor.")
+    return xmin, xmax
+
+
+def clipped(func, lo: float, hi: float):
+    """Clamp function evaluation to [lo, hi] to avoid extrapolation."""
+    def g(x: float) -> float:
+        if x < lo: x = lo
+        if x > hi: x = hi
+        return func(x)
+    return g
+
+
+def robust_intersection(diff_func, lo: float, hi: float) -> Optional[float]:
+    """Find an intersection strictly inside [lo, hi] if a sign change exists."""
+    xs = np.linspace(lo, hi, 800)
+    ys = np.array([diff_func(x) for x in xs])
+    sign_changes = np.where(np.signbit(ys[:-1]) != np.signbit(ys[1:]))[0]
+    for i in sign_changes:
+        a, b = xs[i], xs[i+1]
+        try:
+            return float(brentq(diff_func, a, b))
+        except Exception:
+            continue
+    return None
 
 
 # =========================
@@ -115,7 +149,7 @@ if x_col not in df.columns:
 
 area_to_var = st.sidebar.number_input(
     window_label,
-    min_value=0.00, max_value=window_max,
+    min_value=0.00, max_value=float(window_max),
     value=float(window_default), step=float(window_step), format="%.2f"
 )
 
@@ -124,8 +158,7 @@ shade_alpha = st.sidebar.slider("Shaded area opacity", 0.0, 1.0, 0.30, 0.05)
 
 st.sidebar.markdown("---")
 st.sidebar.caption(
-    "Tip: For Pressure view, set the window to **0.50 psi** for low-pressure comparisons. "
-    "For Weight, **~5 lb** is a good starting window."
+    "In Pressure view, try **0.50 psi**. In Weight view, **~5 lb** is a good starting window."
 )
 
 
@@ -192,99 +225,121 @@ y_comp = competitor["Velocity"].to_numpy()
 f_angleon, _, _ = fit_poly_model(x_angleon, y_angleon, degree=poly_degree)
 f_comp, _, _ = fit_poly_model(x_comp, y_comp, degree=poly_degree)
 
-def diff(x: float) -> float:
-    return f_angleon(x) - f_comp(x)
-
-
-# =========================
-# Intersection (where fits meet) & Range
-# =========================
-x_min = float(max(0.0, min(np.nanmin(x_angleon), np.nanmin(x_comp)) - 0.2))
-x_max = float(max(np.nanmax(x_angleon), np.nanmax(x_comp)) + 0.2)
-x0_guess = 1.0 if x_min <= 1.0 <= x_max else (x_min + x_max) / 2
-
+# --- Domain we will trust (no extrapolation) ---
 try:
-    x_intersect = float(fsolve(diff, x0=x0_guess)[0])
-    if not (x_min - 1.0 <= x_intersect <= x_max + 1.0):
-        raise ValueError("Intersection out of range")
-except Exception:
-    grid = np.linspace(x_min, x_max, 1000)
-    vals = [diff(x) for x in grid]
-    sign_changes = np.where(np.sign(vals[:-1]) != np.sign(vals[1:]))[0]
-    if len(sign_changes) > 0:
-        i = sign_changes[0]
-        x_intersect = float((grid[i] + grid[i + 1]) / 2)
-    else:
-        x_intersect = float(min(x_max, (x_min + x_max) / 2))
+    xmin_common, xmax_common = common_domain(x_angleon, x_comp)
+except ValueError as e:
+    st.error(str(e))
+    st.stop()
+
+# clamp the fit functions to the overlap (prevents accidental extrapolation)
+f_angleon_c = clipped(f_angleon, xmin_common, xmax_common)
+f_comp_c    = clipped(f_comp,    xmin_common, xmax_common)
+
+def diff(x: float) -> float:
+    return f_angleon_c(x) - f_comp_c(x)
 
 
 # =========================
-# Areas & Metrics
+# Intersection strictly inside the overlap
 # =========================
-to_x = float(area_to_var)
+x_intersect_opt = robust_intersection(diff, xmin_common, xmax_common)
 
-area_diff_window = safe_quad(diff, 0.0, to_x)
-area_comp_window = safe_quad(lambda _x: f_comp(_x), 0.0, to_x)
-percent_improvement_window = (area_diff_window / area_comp_window * 100.0) if area_comp_window != 0 else 0.0
 
-cap_x = float(max(0.0, min(x_intersect, x_max)))
-area_diff_intersect = safe_quad(diff, 0.0, cap_x)
-area_comp_intersect = safe_quad(lambda _x: f_comp(_x), 0.0, cap_x)
-percent_improvement_intersect = (area_diff_intersect / area_comp_intersect * 100.0) if area_comp_intersect != 0 else 0.0
+# =========================
+# Areas & Metrics (window anchored at overlap start)
+# =========================
+width = float(area_to_var)
+win_start = xmin_common
+win_end   = min(xmin_common + width, xmax_common)
 
+if win_end <= win_start + 1e-9:
+    area_diff_window = 0.0
+    area_comp_window = 0.0
+else:
+    area_diff_window = safe_quad(diff, win_start, win_end)
+    area_comp_window = safe_quad(lambda _x: f_comp_c(_x), win_start, win_end)
+
+percent_improvement_window = (
+    (area_diff_window / area_comp_window * 100.0) if area_comp_window != 0 else 0.0
+)
+
+# A second metric “to the intersection” only if intersection exists
+if x_intersect_opt is not None:
+    cap_x = x_intersect_opt
+    area_diff_intersect = safe_quad(diff, xmin_common, cap_x)
+    area_comp_intersect = safe_quad(lambda _x: f_comp_c(_x), xmin_common, cap_x)
+    percent_improvement_intersect = (
+        (area_diff_intersect / area_comp_intersect * 100.0)
+        if area_comp_intersect != 0 else 0.0
+    )
+else:
+    cap_x = xmax_common
+    percent_improvement_intersect = float("nan")
+
+# Metrics
 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-col_m1.metric(f"Intersection ({x_units})", f"{x_intersect:.3f}")
-col_m2.metric(f"Advantage Area 0–{to_x:.2f} {x_units}", f"{area_diff_window:.3f} in/sec·{x_units}")
-col_m3.metric(f"Relative Advantage 0–{to_x:.2f} {x_units}", f"{percent_improvement_window:.1f}%")
-col_m4.metric(f"Relative Advantage 0–{cap_x:.2f} {x_units}", f"{percent_improvement_intersect:.1f}%")
+col_m1.metric(
+    f"Intersection ({x_units})",
+    f"{x_intersect_opt:.3f}" if x_intersect_opt is not None else "—"
+)
+col_m2.metric(
+    f"Advantage Area [{win_start:.2f}–{win_end:.2f}] {x_units}",
+    f"{area_diff_window:.3f} in/sec·{x_units}"
+)
+col_m3.metric(
+    f"Relative Advantage [{win_start:.2f}–{win_end:.2f}] {x_units}",
+    f"{percent_improvement_window:.1f}%"
+)
+col_m4.metric(
+    f"Relative Advantage [{xmin_common:.2f}–{(x_intersect_opt if x_intersect_opt is not None else xmax_common):.2f}] {x_units}",
+    f"{percent_improvement_intersect:.1f}%" if x_intersect_opt is not None else "—"
+)
 
 
 # =========================
-# Plot
+# Plot (only within the common domain)
 # =========================
-plot_hi = float(max(cap_x + 0.5, x_max))
-x_range = np.linspace(0.0, plot_hi, 400)
+x_range = np.linspace(xmin_common, xmax_common, 400)
+angleon_fit = np.array([f_angleon_c(x) for x in x_range])
+comp_fit    = np.array([f_comp_c(x)    for x in x_range])
 
-angleon_fit = np.array([f_angleon(x) for x in x_range])
-comp_fit = np.array([f_comp(x) for x in x_range])
-
-def make_fill_between(x, y1, y2, limit):
-    mask = x <= limit
-    x_m = x[mask]
-    y1_m = y1[mask]
-    y2_m = y2[mask]
-    xf = np.concatenate([x_m, x_m[::-1]])
-    yf = np.concatenate([y1_m, y2_m[::-1]])
+def make_fill_between(x, y1, y2, a, b):
+    mask = (x >= a) & (x <= b)
+    if not np.any(mask):
+        return np.array([]), np.array([])
+    xm = x[mask]
+    y1m, y2m = y1[mask], y2[mask]
+    xf = np.concatenate([xm, xm[::-1]])
+    yf = np.concatenate([y1m, y2m[::-1]])
     return xf, yf
 
-x_fill_window, y_fill_window = make_fill_between(x_range, angleon_fit, comp_fit, to_x)
-x_fill_intersect, y_fill_intersect = make_fill_between(x_range, angleon_fit, comp_fit, cap_x)
+x_fill_window, y_fill_window = make_fill_between(x_range, angleon_fit, comp_fit, win_start, win_end)
+x_fill_inter, y_fill_inter   = (np.array([]), np.array([]))
+if x_intersect_opt is not None:
+    x_fill_inter, y_fill_inter = make_fill_between(x_range, angleon_fit, comp_fit, xmin_common, x_intersect_opt)
 
 fig = go.Figure()
 
-# Shaded advantage areas
-fig.add_trace(go.Scatter(
-    x=x_fill_window,
-    y=y_fill_window,
-    fill="toself",
-    fillcolor=f"rgba(150,150,150,{shade_alpha})",
-    line=dict(color="rgba(0,0,0,0)"),
-    hoverinfo="skip",
-    name=f"Advantage Area (0–{to_x:.2f} {x_units})"
-))
-
-if cap_x > to_x:
+# window shade
+if x_fill_window.size:
     fig.add_trace(go.Scatter(
-        x=x_fill_intersect,
-        y=y_fill_intersect,
-        fill="toself",
-        fillcolor=f"rgba(150,150,150,{max(0.05, shade_alpha/2)})",
-        line=dict(color="rgba(0,0,0,0)"),
-        hoverinfo="skip",
-        name=f"Advantage Area (0–{cap_x:.2f} {x_units})"
+        x=x_fill_window, y=y_fill_window,
+        fill="toself", fillcolor=f"rgba(150,150,150,{shade_alpha})",
+        line=dict(color="rgba(0,0,0,0)"), hoverinfo="skip",
+        name=f"Advantage Area [{win_start:.2f}–{win_end:.2f}] {x_units}"
     ))
 
-# Model lines (fixed hovertemplate braces)
+# to-intersection shade (only if it exists)
+if x_intersect_opt is not None and x_fill_inter.size:
+    fig.add_trace(go.Scatter(
+        x=x_fill_inter, y=y_fill_inter,
+        fill="toself", fillcolor=f"rgba(150,150,150,{max(0.05, shade_alpha/2)})",
+        line=dict(color="rgba(0,0,0,0)"), hoverinfo="skip",
+        name=f"Advantage Area [{xmin_common:.2f}–{x_intersect_opt:.2f}] {x_units}"
+    ))
+
+# lines (fixed hovertemplate braces)
 fig.add_trace(go.Scatter(
     x=x_range, y=angleon_fit,
     mode="lines",
@@ -300,29 +355,34 @@ fig.add_trace(go.Scatter(
     hovertemplate=f"{x_col}: %{{x:.2f}} {x_units}<br>Velocity: %{{y:.2f}} in/sec"
 ))
 
-# Raw points (optional)
+# Raw points (optional) — show only if they're inside overlap
 if show_points:
-    fig.add_trace(go.Scatter(
-        x=x_angleon, y=y_angleon,
-        mode="markers", name="AngleOn™ data",
-        marker=dict(size=8, color="blue")
-    ))
-    fig.add_trace(go.Scatter(
-        x=x_comp, y=y_comp,
-        mode="markers", name="Competitor data",
-        marker=dict(size=8, color="red")
-    ))
+    mask_a = (x_angleon >= xmin_common) & (x_angleon <= xmax_common)
+    mask_c = (x_comp     >= xmin_common) & (x_comp     <= xmax_common)
+    if np.any(mask_a):
+        fig.add_trace(go.Scatter(
+            x=x_angleon[mask_a], y=y_angleon[mask_a],
+            mode="markers", name="AngleOn™ data",
+            marker=dict(size=8, color="blue")
+        ))
+    if np.any(mask_c):
+        fig.add_trace(go.Scatter(
+            x=x_comp[mask_c], y=y_comp[mask_c],
+            mode="markers", name="Competitor data",
+            marker=dict(size=8, color="red")
+        ))
 
-# Annotation
-fig.add_annotation(
-    x=float(np.clip(to_x, 0, plot_hi)),
-    y=float((np.nanmax(angleon_fit) + np.nanmax(comp_fit)) / 2),
-    text=(f"Advantage 0–{to_x:.2f} {x_units} = {area_diff_window:.3f} in/sec·{x_units}"
-          f"<br>Relative = {percent_improvement_window:.1f}%"),
-    showarrow=False
-)
+# annotation at window end
+if x_fill_window.size:
+    fig.add_annotation(
+        x=float(win_end),
+        y=float((np.nanmax(angleon_fit) + np.nanmax(comp_fit)) / 2),
+        text=(f"Advantage [{win_start:.2f}–{win_end:.2f}] {x_units} "
+              f"= {area_diff_window:.3f} in/sec·{x_units}"
+              f"<br>Relative = {percent_improvement_window:.1f}%"),
+        showarrow=False
+    )
 
-# Layout
 fig.update_layout(
     xaxis_title=f"{x_col} ({x_units})",
     yaxis_title="Velocity (in/sec)",
