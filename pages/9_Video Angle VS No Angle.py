@@ -18,40 +18,37 @@ video_url = st.sidebar.text_input(
     value="https://youtu.be/Eerrp0QNPqk",
     help="Paste a YouTube or Vimeo link here."
 )
-autoplay = st.sidebar.checkbox("Autoplay", value=True)
-loop = st.sidebar.checkbox("Loop", value=True)
-muted = st.sidebar.checkbox("Muted", value=False)
+
+size_label = st.sidebar.select_slider(
+    "Display size",
+    options=["Compact (55%)", "Medium (65%)", "Wide (75%)"],
+    value="Medium (65%)",
+    help="Adjust the visual width of the embedded video."
+)
+
+# Map size label to column weights (smaller middle column → smaller video)
+size_to_cols = {
+    "Compact (55%)": [3, 2.4, 3],   # ~40% of page width
+    "Medium (65%)":  [2, 2.6, 2],   # ~46% of page width
+    "Wide (75%)":    [2, 3.2, 2],   # ~53% of page width
+}
+col_weights = size_to_cols[size_label]
 
 # --- Description / Notes ---
 with st.expander("Test setup & notes", expanded=True):
-    st.markdown("""
+    st.markdown(
+        """
 - **System:** 36” linear vibratory feeder @ 120 VAC  
 - **Brushes:** AngleOn™ vs. Non-angled configuration  
 - **Observation:** Angle forces movement direction  
-    """)
+        """
+    )
 
-# --- Custom CSS to resize video ---
-st.markdown(
-    """
-    <style>
-    .video-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-    .video-container iframe {
-        width: 70%;  /* Adjust this to make video larger/smaller (e.g., 60%, 80%) */
-        height: auto;
-        aspect-ratio: 16 / 9;
-        border-radius: 12px;
-        box-shadow: 0 0 15px rgba(0,0,0,0.25);
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# --- Video Display (Streamlit-native; sized via columns) ---
+left, mid, right = st.columns(col_weights)
+with mid:
+    # st.video() handles YouTube/Vimeo/MP4 and stays within the column width
+    st.video(video_url)
 
-# --- Video Display ---
-st.markdown('<div class="video-container">', unsafe_allow_html=True)
-st.video(video_url, autoplay=autoplay, muted=muted, loop=loop)
-st.markdown('</div>', unsafe_allow_html=True)
+# --- Footer (optional) ---
+# st.caption("All testing performed on the same platform as the Velocity vs Pressure study.")
