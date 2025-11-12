@@ -9,7 +9,6 @@ import plotly.graph_objects as go
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from scipy.integrate import quad
-from scipy.optimize import fsolve, brentq
 
 
 # =========================
@@ -19,8 +18,8 @@ st.set_page_config(page_title="Velocity vs Pressure", layout="wide")
 st.title("Object Velocity vs Pressure — AngleOn™ vs Competitor")
 
 st.caption("""
-Key Points:    
-AngleOn™ moves objects faster than competitor product across all object weights/pressures tested with the largest advantage in the lower pressure ranges. 
+Key Points:
+AngleOn™ moves objects faster than competitor product across all object weights/pressures tested with the largest advantage in the lower ranges.
 Please reference the table for specifics on object details. Weight range tested 0.167lbs - 22.5lbs (feeder cannot physically move anything heavier).
 """)
 
@@ -53,7 +52,7 @@ def fit_poly_model(x: np.ndarray, y: np.ndarray, degree: int):
     model = LinearRegression().fit(X_poly, y)
     def f(x_scalar: float) -> float:
         return float(model.predict(poly.transform(np.array([[x_scalar]])))[0])
-    return f, poly, model
+    return f
 
 
 def safe_quad(func, a: float, b: float) -> float:
@@ -82,20 +81,6 @@ def clipped(func, lo: float, hi: float):
     return g
 
 
-def robust_intersection(diff_func, lo: float, hi: float) -> Optional[float]:
-    """Find an intersection strictly inside [lo, hi] if a sign change exists."""
-    xs = np.linspace(lo, hi, 800)
-    ys = np.array([diff_func(x) for x in xs])
-    sign_changes = np.where(np.signbit(ys[:-1]) != np.signbit(ys[1:]))[0]
-    for i in sign_changes:
-        a, b = xs[i], xs[i+1]
-        try:
-            return float(brentq(diff_func, a, b))
-        except Exception:
-            continue
-    return None
-
-
 # =========================
 # Data Load
 # =========================
@@ -115,7 +100,7 @@ if not ok:
 
 
 # =========================
-# Sidebar Controls (after data load so we can bound controls)
+# Sidebar Controls
 # =========================
 st.sidebar.header("Controls")
 
@@ -147,7 +132,7 @@ if x_col not in df.columns:
     st.error(f"Column '{x_col}' not found in the CSV. Available columns: {list(df.columns)}")
     st.stop()
 
-area_to_var = st.sidebar.number_input(
+area_width = st.sidebar.number_input(
     window_label,
     min_value=0.00, max_value=float(window_max),
     value=float(window_default), step=float(window_step), format="%.2f"
@@ -208,7 +193,7 @@ with st.expander("Show CSV data / object details", expanded=False):
 
 
 # =========================
-# Prep Data & Fit Models
+# Prep Data & Fit Models (no extrapolation beyond overlap)
 # =========================
 angleon = df[df["Brush"].str.strip() == "AngleOn™"].copy()
 competitor = df[df["Brush"].str.strip() == "Competitor"].copy()
@@ -222,17 +207,18 @@ y_angleon = angleon["Velocity"].to_numpy()
 x_comp = competitor[x_col].to_numpy()
 y_comp = competitor["Velocity"].to_numpy()
 
-f_angleon, _, _ = fit_poly_model(x_angleon, y_angleon, degree=poly_degree)
-f_comp, _, _ = fit_poly_model(x_comp, y_comp, degree=poly_degree)
+# Fit cubics
+f_angleon = fit_poly_model(x_angleon, y_angleon, degree=poly_degree)
+f_comp    = fit_poly_model(x_comp,    y_comp,    degree=poly_degree)
 
-# --- Domain we will trust (no extrapolation) ---
+# Overlapping domain only
 try:
     xmin_common, xmax_common = common_domain(x_angleon, x_comp)
 except ValueError as e:
     st.error(str(e))
     st.stop()
 
-# clamp the fit functions to the overlap (prevents accidental extrapolation)
+# Clamp fits to overlap
 f_angleon_c = clipped(f_angleon, xmin_common, xmax_common)
 f_comp_c    = clipped(f_comp,    xmin_common, xmax_common)
 
@@ -241,17 +227,10 @@ def diff(x: float) -> float:
 
 
 # =========================
-# Intersection strictly inside the overlap
-# =========================
-x_intersect_opt = robust_intersection(diff, xmin_common, xmax_common)
-
-
-# =========================
 # Areas & Metrics (window anchored at overlap start)
 # =========================
-width = float(area_to_var)
 win_start = xmin_common
-win_end   = min(xmin_common + width, xmax_common)
+win_end   = min(xmin_common + float(area_width), xmax_common)
 
 if win_end <= win_start + 1e-9:
     area_diff_window = 0.0
@@ -264,25 +243,8 @@ percent_improvement_window = (
     (area_diff_window / area_comp_window * 100.0) if area_comp_window != 0 else 0.0
 )
 
-# A second metric “to the intersection” only if intersection exists
-if x_intersect_opt is not None:
-    cap_x = x_intersect_opt
-    area_diff_intersect = safe_quad(diff, xmin_common, cap_x)
-    area_comp_intersect = safe_quad(lambda _x: f_comp_c(_x), xmin_common, cap_x)
-    percent_improvement_intersect = (
-        (area_diff_intersect / area_comp_intersect * 100.0)
-        if area_comp_intersect != 0 else 0.0
-    )
-else:
-    cap_x = xmax_common
-    percent_improvement_intersect = float("nan")
-
-# Metrics
-col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-col_m1.metric(
-    f"Intersection ({x_units})",
-    f"{x_intersect_opt:.3f}" if x_intersect_opt is not None else "—"
-)
+# Metrics (only the two you want)
+col_m2, col_m3 = st.columns(2)
 col_m2.metric(
     f"Advantage Area [{win_start:.2f}–{win_end:.2f}] {x_units}",
     f"{area_diff_window:.3f} in/sec·{x_units}"
@@ -290,10 +252,6 @@ col_m2.metric(
 col_m3.metric(
     f"Relative Advantage [{win_start:.2f}–{win_end:.2f}] {x_units}",
     f"{percent_improvement_window:.1f}%"
-)
-col_m4.metric(
-    f"Relative Advantage [{xmin_common:.2f}–{(x_intersect_opt if x_intersect_opt is not None else xmax_common):.2f}] {x_units}",
-    f"{percent_improvement_intersect:.1f}%" if x_intersect_opt is not None else "—"
 )
 
 
@@ -315,9 +273,6 @@ def make_fill_between(x, y1, y2, a, b):
     return xf, yf
 
 x_fill_window, y_fill_window = make_fill_between(x_range, angleon_fit, comp_fit, win_start, win_end)
-x_fill_inter, y_fill_inter   = (np.array([]), np.array([]))
-if x_intersect_opt is not None:
-    x_fill_inter, y_fill_inter = make_fill_between(x_range, angleon_fit, comp_fit, xmin_common, x_intersect_opt)
 
 fig = go.Figure()
 
@@ -330,16 +285,7 @@ if x_fill_window.size:
         name=f"Advantage Area [{win_start:.2f}–{win_end:.2f}] {x_units}"
     ))
 
-# to-intersection shade (only if it exists)
-if x_intersect_opt is not None and x_fill_inter.size:
-    fig.add_trace(go.Scatter(
-        x=x_fill_inter, y=y_fill_inter,
-        fill="toself", fillcolor=f"rgba(150,150,150,{max(0.05, shade_alpha/2)})",
-        line=dict(color="rgba(0,0,0,0)"), hoverinfo="skip",
-        name=f"Advantage Area [{xmin_common:.2f}–{x_intersect_opt:.2f}] {x_units}"
-    ))
-
-# lines (fixed hovertemplate braces)
+# lines (hovertemplate braces fixed)
 fig.add_trace(go.Scatter(
     x=x_range, y=angleon_fit,
     mode="lines",
