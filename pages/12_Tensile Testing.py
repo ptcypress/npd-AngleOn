@@ -1,9 +1,6 @@
 # pages/N6_Tensile_Pulls.py
 # ---------------------------------------------------------------
-# Streamlit page: N6 Belt — Tensile Pulls (toggle metric)
-# - Fixed dataset (from lab report)
-# - Default visualization: Box Plot
-# - Toggle between: Maximum Force, Displacement @ Max, Force @ 0.05 in
+# Streamlit page: N6 Belt — Tensile Pulls (default = Displacement)
 # ---------------------------------------------------------------
 
 import pandas as pd
@@ -24,7 +21,6 @@ INSTRON tensile testing of AngleOn™ raw material.
 
 # ---------------------------
 # Fixed Dataset (from report)
-# Columns: Sample, Max Force (lbf), Disp @ Max (in), Force @ 0.05in (lbf)
 # ---------------------------
 rows = [
     ( 1, 191.80, 0.96, 19.52),
@@ -71,24 +67,24 @@ rows = [
 df = pd.DataFrame(rows, columns=["Sample", "Maximum Force (lbf)", "Displacement @ Max (in)", "Force @ 0.05 in (lbf)"])
 
 # ---------------------------
-# Control: Metric toggle (left-aligned, no sidebar)
+# Control: Metric toggle
 # ---------------------------
 c1, = st.columns([3])
 with c1:
     metric = st.selectbox(
         "Metric",
         ["Maximum Force (lbf)", "Displacement @ Max (in)", "Force @ 0.05 in (lbf)"],
-        index=0
+        index=1  # <-- Default to Displacement
     )
 
 # ---------------------------
-# Summary Metrics (for selected metric)
+# Summary Metrics
 # ---------------------------
 series = df[metric]
-mean_val = float(series.mean())
-median_val = float(series.median())
-min_val = float(series.min())
-max_val = float(series.max())
+mean_val = series.mean()
+median_val = series.median()
+min_val = series.min()
+max_val = series.max()
 
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Samples", len(series))
@@ -97,7 +93,7 @@ m3.metric(f"Median {metric}", f"{median_val:.3f}")
 m4.metric(f"Range {metric}", f"{min_val:.3f} – {max_val:.3f}")
 
 # ---------------------------
-# Box Plot (default visualization)
+# Box Plot
 # ---------------------------
 fig = go.Figure()
 fig.add_trace(go.Box(y=series, name=metric, boxmean=True))
@@ -117,4 +113,3 @@ st.download_button("Download Data (CSV)", data=csv_data, file_name="n6_tensile_p
 
 with st.expander("Show data table"):
     st.dataframe(df, use_container_width=True)
-
