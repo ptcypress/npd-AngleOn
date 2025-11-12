@@ -14,6 +14,7 @@ This is a collection of engineering analyses specific to angle brush development
 Use the sidebar on the left to navigate between apps:
 
 -  **Physical Characteristics:**
+    -  Tensile Testing
     -  Angle Decay
     -  Decibel Measurements
     -  Monofilament Coverage
@@ -26,6 +27,7 @@ Use the sidebar on the left to navigate between apps:
     -  Video AngleOn™ vs UltraNylon
 ---
 """)
+
 
 
 
