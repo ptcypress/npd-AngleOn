@@ -4,7 +4,7 @@ import streamlit as st
 st.set_page_config(page_title="Video — Angle vs No Angle", layout="wide")
 
 # --- Header ---
-st.title("Angle vs No Angle — Feeder Demonstration")
+st.title("AngleOn™ vs UltraNylon — Feeder Demonstration")
 st.caption("""
 Key Points:    
 Video demonstration of difference in object movement using straight Ultra Nylon vs AngleOn™ product. Angled monofilament forces object movement that aligns with linear feeder impulse direction. 
