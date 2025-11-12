@@ -8,8 +8,12 @@ st.set_page_config(page_title="Monofilament Coverage", layout="wide")
 st.title("Monofilament Coverage")
 
 st.caption("""
-Use the sliders in the sidebar to explore how different EPI² values affect theoretical coverage
-over a range of filament diameters. Preloaded values represent actual material densities & monofilament diameters""")
+Key Points:    
+-AngleOn™ Coverage Area:     19.5% / in²
+-Competitor Coverage Area:   15.5% / in²
+This is a tool used to explore how different combinations of brush density (epi²) values and monofilament diameters (in) affect brush coverage area per unit area of material. 
+This can be used to quantify object. Preloaded values represent actual material densities & monofilament diameters. Use sliders in side panel to explore different coverage arrangements.
+""")
 
 # Sidebar controls
 st.sidebar.header("EPI² Values (ends per inch squared)")
