@@ -16,7 +16,7 @@ st.set_page_config(page_title="Velocity vs Mass & Pressure", layout="wide")
 st.title("Object Velocity vs Pressure — AngleOn™ vs Competitor")
 
 st.caption("""
-Key Points:
+Key Points:    
 AngleOn™ moves objects faster than competitor product across all object weights/pressures tested with the largest advantage in the lower ranges.
 Please reference the table for specifics on object details. Weight range tested 0.167lbs - 22.5lbs (feeder cannot physically move anything heavier).
 """)
