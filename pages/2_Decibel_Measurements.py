@@ -35,7 +35,7 @@ else:
 
 # --- Choose series to plot: all numeric columns except timestamp ---
 # Try to coerce likely level columns to numeric if needed
-likely_level_names = [c for c in df.columns if any(k in c.lower() for k in ["dba", "dbc", "db", "spl", "level", "value"]) ]
+likely_level_names = [c for c in df.columns if any(k in c.lower() for k in ["dba", "dbc", "db", "spl", "level", "value"])]
 for c in likely_level_names:
     if not pd.api.types.is_numeric_dtype(df[c]):
         df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -55,11 +55,27 @@ required_present = [c for c in REQUIRED if c in numeric_cols]
 
 # Optional pool = all other numeric series
 optional_pool = [c for c in numeric_cols if c not in REQUIRED]
-# Sidebar multiselect to choose optional series; default to show all optional
+
+# Sort options in a consistent, custom order
+priority_order = ["AngleOn", "Competitor", "XT10", "XT16"]
+def sort_key(name: str):
+    try:
+        idx = priority_order.index(name)
+    except ValueError:
+        idx = len(priority_order)
+    return (idx, name)
+
+optional_pool_sorted = sorted(optional_pool, key=sort_key)
+
+# Define defaults: only show AngleOn and Competitor initially (if present)
+default_names = {"AngleOn", "Competitor"}
+default_optional = [c for c in optional_pool_sorted if c in default_names]
+
+# Sidebar multiselect to choose optional series; default to AngleOn + Competitor only
 selected_optional = st.sidebar.multiselect(
     "Optional series",
-    options=optional_pool,
-    default=optional_pool,
+    options=optional_pool_sorted,
+    default=default_optional,
 )
 
 # --- Build figure ---
