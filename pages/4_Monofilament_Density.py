@@ -59,9 +59,12 @@ def draw_monofilament(positions, diameter, title, density, total_area, percent_c
         diameter_pt = diameter * pt_per_inch
         size_pt_squared = (diameter_pt / 2) ** 2 * np.pi
 
-        ax.scatter(positions[:, 0], positions[:, 1],
-                   s=size_pt_squared, edgecolor='black', facecolors='gray', linewidth=0.2)
+        ax.scatter(
+            positions[:, 0], positions[:, 1],
+            s=size_pt_squared, edgecolor='black', facecolors='gray', linewidth=0.2
+        )
 
+    # 1" bounding box
     ax.plot([0, 1, 1, 0, 0], [0, 0, 1, 1, 0], 'k-', lw=1)
     ax.set_aspect('equal')
     ax.set_xlim(0, 1)
@@ -71,36 +74,38 @@ def draw_monofilament(positions, diameter, title, density, total_area, percent_c
     ax.set_xlabel("inches")
     ax.set_ylabel("inches")
     ax.set_title(f"{title}\n{density} ends/in², {diameter}\" dia")
-    
-    fig.text(0.5, 0.01, f"Monofilament area = {total_area:.4f} in²  •  Coverage = {percent_coverage:.1f}%",
-             ha='center', fontsize=9)
+
+    fig.text(
+        0.5, 0.01,
+        f"Monofilament area = {total_area:.4f} in²  •  Coverage = {percent_coverage:.1f}%",
+        ha='center', fontsize=9
+    )
     plt.tight_layout()
     return fig
 
 # ---------------------------
-# Streamlit UI
+# Streamlit UI (sidebar-first layout)
 # ---------------------------
-st.set_page_config(page_title="Monofilament Density Viewer", layout="centered")
-st.title("Monofilament Density Visualizer")
-st.caption("""This is a scaled visualizer showing coverage area of different brush types given 
-their density (epi²) and monofilament diameter (in) within one square inch of brush. 
-Presets use actual densities and diameters of brushes tested to date.""")
+st.set_page_config(page_title="Monofilament Density Viewer", layout="wide")
 
-# Layout
-col1, col2, col3 = st.columns(3)
-with col1:
+with st.sidebar:
+    st.title("Monofilament Density Visualizer")
+    st.caption(
+        "Scaled visualizer showing coverage area of different brush types given their "
+        "density (epi²) and monofilament diameter (in) within one square inch of brush. "
+        "Presets use actual densities and diameters of brushes tested to date."
+    )
+
     pattern = st.selectbox("Pattern Type", ["hex", "grid"])
-
-with col2:
     preset = st.selectbox("Choose Preset", list(PRESETS.keys()))
 
-if preset == "Custom":
-    with col3:
+    if preset == "Custom":
         density = st.slider("Filament Density (ends/in²)", 1000, 12000, 6912, step=10)
-        diameter = st.slider("", 0.002, 0.02, 0.006, step=0.0005)
-else:
-    density, diameter = PRESETS[preset]
+        diameter = st.slider("Filament Diameter (in)", 0.002, 0.02, 0.006, step=0.0005)
+    else:
+        density, diameter = PRESETS[preset]
 
+# Main area just shows the plot
 positions, total_area, percent_coverage = generate_monofilament_data(density, diameter, pattern)
 fig = draw_monofilament(positions, diameter, preset, density, total_area, percent_coverage)
-st.pyplot(fig)
+st.pyplot(fig, use_container_width=False)
