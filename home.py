@@ -22,10 +22,11 @@ Use the sidebar on the left to navigate between apps:
     -  Accelerated Wear Test 
     -  Product Durability
     -  Velocity Boxplot
-    -  Velocity vs Pressure
+    -  Velocity vs Mass & Pressure
     -  Video AngleOn™ vs Ultra Nylon
 ---
 """)
+
 
 
 
