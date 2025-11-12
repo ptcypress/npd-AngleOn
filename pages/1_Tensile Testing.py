@@ -1,8 +1,9 @@
 # pages/Pile_Pull_Results.py
 # ---------------------------------------------------------------
-# Streamlit page: AngleOn™ Pile Pull Results (simplified static version)
-# - Displays fixed dataset (from your original test)
-# - Defaults to Box Plot visualization
+# Streamlit page: AngleOn™ Pile Pull Results (toggle metric)
+# - Fixed dataset (from your original test)
+# - Default visualization: Box Plot
+# - Toggle between "Max Load (lbf)" and "Disp @ Max (in)"
 # ---------------------------------------------------------------
 
 import pandas as pd
@@ -13,16 +14,16 @@ import streamlit as st
 # Page Setup
 # ---------------------------
 st.set_page_config(page_title="Pile Pull Results", layout="wide")
-st.title("Tensile Testing — AngleOn™")
+st.title("Pile Pull Results — AngleOn™")
 st.caption("""
-Key Points:  
-INSTRON Tensile testing for AngleOn™ raw material.  
--**Average Max Load:                   33.02lbF**  
--**Average Displacement @ Max Load:    0.121in**   
+Key Points:    
+INSTRON Tensile testing for AngleOn™ raw material.    
+-**Average Max Load:                   33.02lbF**    
+-**Average Displacement @ Max Load:    0.121in**  
 """)
 
 # ---------------------------
-# Sample Dataset (from your report)
+# Fixed Dataset (from your report)
 # ---------------------------
 sample = [
     (1,  "LC306064-42PN BK 100R", 34.28, 0.22),
@@ -49,28 +50,37 @@ sample = [
 df = pd.DataFrame(sample, columns=["Specimen", "Type", "Max Load (lbf)", "Disp @ Max (in)"])
 
 # ---------------------------
-# Summary Metrics
+# Controls (left-aligned)
 # ---------------------------
-mean_load = df["Max Load (lbf)"].mean()
-mean_disp = df["Disp @ Max (in)"].mean()
-max_load = df["Max Load (lbf)"].max()
-min_load = df["Max Load (lbf)"].min()
+c1, = st.columns([3])
+with c1:
+    metric = st.selectbox("Metric", ["Max Load (lbf)", "Disp @ Max (in)"], index=0)
+
+# ---------------------------
+# Summary Metrics (for selected metric)
+# ---------------------------
+series = df[metric]
+mean_val = series.mean()
+min_val = series.min()
+max_val = series.max()
+p25 = series.quantile(0.25)
+median = series.median()
+p75 = series.quantile(0.75)
 
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Sample Size", len(df))
-m2.metric("Mean Max Load (lbf)", f"{mean_load:.2f}")
-m3.metric("Mean Disp @ Max (in)", f"{mean_disp:.3f}")
-m4.metric("Range (lbf)", f"{min_load:.1f} – {max_load:.1f}")
+m1.metric("Sample Size", len(series))
+m2.metric(f"Mean {metric}", f"{mean_val:.3f}")
+m3.metric(f"Median {metric}", f"{median:.3f}")
+m4.metric(f"Range {metric}", f"{min_val:.3f} – {max_val:.3f}")
 
 # ---------------------------
-# Default Visualization: Box Plots
+# Box Plot (default visualization)
 # ---------------------------
 fig = go.Figure()
-fig.add_trace(go.Box(y=df["Max Load (lbf)"], name="Max Load (lbf)", boxmean=True))
-fig.add_trace(go.Box(y=df["Disp @ Max (in)"], name="Disp @ Max (in)", boxmean=True))
+fig.add_trace(go.Box(y=series, name=metric, boxmean=True))
 fig.update_layout(
-    title="Distribution of Max Load & Displacement @ Max",
-    yaxis_title="Value",
+    title=f"Distribution — {metric}",
+    yaxis_title=metric,
     height=460,
     margin=dict(l=40, r=20, t=60, b=40),
 )
