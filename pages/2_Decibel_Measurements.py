@@ -33,8 +33,7 @@ if "timestamp" in cols_lower:
 else:
     x = df.index
 
-# --- Choose series to plot: all numeric columns except timestamp ---
-# Try to coerce likely level columns to numeric if needed
+# --- Coerce likely level columns to numeric if needed ---
 likely_level_names = [c for c in df.columns if any(k in c.lower() for k in ["dba", "dbc", "db", "spl", "level", "value"])]
 for c in likely_level_names:
     if not pd.api.types.is_numeric_dtype(df[c]):
@@ -55,21 +54,29 @@ required_present = [c for c in REQUIRED if c in numeric_cols]
 # Optional pool = all other numeric series
 optional_pool = [c for c in numeric_cols if c not in REQUIRED]
 
-# Sort options in a consistent, custom order
-priority_order = ["AngleOn", "Competitor", "XT10", "XT16"]
-def sort_key(name: str):
-    try:
-        idx = priority_order.index(name)
-    except ValueError:
-        idx = len(priority_order)
-    return (idx, name)
+# --- Handle case-insensitive matching + trademark symbol ---
+def matches_any_keyword(name: str, keywords) -> bool:
+    n = name.lower()
+    return any(k.lower() in n for k in keywords)
 
-optional_pool_sorted = sorted(optional_pool, key=sort_key)
+priority_keywords = ["AngleOn™", "AngleOn", "Competitor", "XT10", "XT16"]
 
-# Default to both AngleOn and Competitor if present
-default_optional = [c for c in optional_pool_sorted if c in ["AngleOn", "Competitor"]]
+def priority_index(name: str) -> int:
+    n = name.lower()
+    for i, k in enumerate(priority_keywords):
+        if k.lower() in n:
+            return i
+    return len(priority_keywords)
 
-# Sidebar selection
+optional_pool_sorted = sorted(optional_pool, key=lambda nm: (priority_index(nm), nm))
+
+# Default to both AngleOn™ and Competitor if present
+default_optional = [
+    c for c in optional_pool_sorted
+    if matches_any_keyword(c, ["AngleOn™", "AngleOn", "Competitor"])
+]
+
+# Sidebar multiselect
 selected_optional = st.sidebar.multiselect(
     "Optional series",
     options=optional_pool_sorted,
