@@ -215,7 +215,6 @@ except Exception:
         i = sign_changes[0]
         x_intersect = float((grid[i] + grid[i + 1]) / 2)
     else:
-        # If no intersection, cap to a meaningful number within the observed range
         x_intersect = float(min(x_max, (x_min + x_max) / 2))
 
 
@@ -285,20 +284,20 @@ if cap_x > to_x:
         name=f"Advantage Area (0–{cap_x:.2f} {x_units})"
     ))
 
-# Model lines
+# Model lines (fixed hovertemplate braces)
 fig.add_trace(go.Scatter(
     x=x_range, y=angleon_fit,
     mode="lines",
     name="AngleOn™ cubic fit",
     line=dict(width=line_width, color="blue"),
-    hovertemplate=f"{x_col}: %{x:.2f} {x_units}<br>Velocity: %{y:.2f} in/sec"
+    hovertemplate=f"{x_col}: %{{x:.2f}} {x_units}<br>Velocity: %{{y:.2f}} in/sec"
 ))
 fig.add_trace(go.Scatter(
     x=x_range, y=comp_fit,
     mode="lines",
     name="Competitor cubic fit",
     line=dict(width=line_width, color="red"),
-    hovertemplate=f"{x_col}: %{x:.2f} {x_units}<br>Velocity: %{y:.2f} in/sec"
+    hovertemplate=f"{x_col}: %{{x:.2f}} {x_units}<br>Velocity: %{{y:.2f}} in/sec"
 ))
 
 # Raw points (optional)
