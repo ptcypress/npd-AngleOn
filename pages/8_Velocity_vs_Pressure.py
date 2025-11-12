@@ -23,7 +23,7 @@ AngleOn™ moves objects faster than competitor product across all object weight
 Please reference the table for specifics on object details. Weight range tested 0.167lbs - 22.5lbs (feeder cannot physically move anything heavier).
 """)
 
-# Fixed file/path and cubic fit (no upload, no degree slider)
+# Fixed file/path and cubic fit
 default_path = "data/velocity_data.csv"
 csv_path = default_path
 poly_degree = 3  # cubic
@@ -64,7 +64,7 @@ def safe_quad(func, a: float, b: float) -> float:
 
 
 def common_domain(x1: np.ndarray, x2: np.ndarray) -> tuple[float, float]:
-    """Compute overlapping domain between two x arrays; raise if none."""
+    """Overlapping domain between two x arrays; raise if none."""
     xmin = float(max(np.nanmin(x1), np.nanmin(x2)))
     xmax = float(min(np.nanmax(x1), np.nanmax(x2)))
     if xmax < xmin:
@@ -100,7 +100,7 @@ if not ok:
 
 
 # =========================
-# Sidebar Controls
+# Sidebar Controls (needs df for options)
 # =========================
 st.sidebar.header("Controls")
 
@@ -111,40 +111,18 @@ axis_choice = st.sidebar.radio(
     index=0
 )
 
-# Resolve x column, units, defaults
+# Resolve x column & units
 if axis_choice.startswith("Weight"):
     x_col = "Weight"
     x_units = "lb"
-    window_label = f"{x_col} window for relative advantage ({x_units})"
-    window_step = 0.5
-    window_max = float(df[x_col].max()) if x_col in df.columns else 100.0
-    window_default = min(5.0, window_max) if window_max > 0 else 5.0
 else:
     x_col = "Pressure"
     x_units = "psi"
-    window_label = f"{x_col} window for relative advantage ({x_units})"
-    window_step = 0.05
-    window_max = 100.0
-    window_default = 0.50
 
 # Ensure the chosen x-axis column exists
 if x_col not in df.columns:
     st.error(f"Column '{x_col}' not found in the CSV. Available columns: {list(df.columns)}")
     st.stop()
-
-area_width = st.sidebar.number_input(
-    window_label,
-    min_value=0.00, max_value=float(window_max),
-    value=float(window_default), step=float(window_step), format="%.2f"
-)
-
-show_points = st.sidebar.checkbox("Show raw data points", value=False)  # default OFF
-shade_alpha = st.sidebar.slider("Shaded area opacity", 0.0, 1.0, 0.30, 0.05)
-
-st.sidebar.markdown("---")
-st.sidebar.caption(
-    "In Pressure view, try **0.50 psi**. In Weight view, **~5 lb** is a good starting window."
-)
 
 
 # =========================
@@ -193,7 +171,7 @@ with st.expander("Show CSV data / object details", expanded=False):
 
 
 # =========================
-# Prep Data & Fit Models (no extrapolation beyond overlap)
+# Prep Data & Fit Models (overlap only)
 # =========================
 angleon = df[df["Brush"].str.strip() == "AngleOn™"].copy()
 competitor = df[df["Brush"].str.strip() == "Competitor"].copy()
@@ -227,7 +205,27 @@ def diff(x: float) -> float:
 
 
 # =========================
-# Areas & Metrics (window anchored at overlap start)
+# Window slider (defaults to the FULL overlap)
+# =========================
+full_range = float(xmax_common - xmin_common)
+# Reasonable step: 1% of range (fall back to small positive)
+step_val = max(full_range / 100.0, 0.01)
+
+st.sidebar.markdown("---")
+area_width = st.sidebar.slider(
+    f"Shaded window width ({x_units})",
+    min_value=0.0,
+    max_value=float(full_range),
+    value=float(full_range),   # default = FULL RANGE
+    step=float(step_val)
+)
+
+show_points = st.sidebar.checkbox("Show raw data points", value=False)  # default OFF
+shade_alpha = st.sidebar.slider("Shaded area opacity", 0.0, 1.0, 0.30, 0.05)
+
+
+# =========================
+# Relative Advantage (window anchored at overlap min)
 # =========================
 win_start = xmin_common
 win_end   = min(xmin_common + float(area_width), xmax_common)
@@ -239,19 +237,14 @@ else:
     area_diff_window = safe_quad(diff, win_start, win_end)
     area_comp_window = safe_quad(lambda _x: f_comp_c(_x), win_start, win_end)
 
-percent_improvement_window = (
+relative_advantage = (
     (area_diff_window / area_comp_window * 100.0) if area_comp_window != 0 else 0.0
 )
 
-# Metrics (only the two you want)
-col_m2, col_m3 = st.columns(2)
-col_m2.metric(
-    f"Advantage Area [{win_start:.2f}–{win_end:.2f}] {x_units}",
-    f"{area_diff_window:.3f} in/sec·{x_units}"
-)
-col_m3.metric(
+# Single metric only
+st.metric(
     f"Relative Advantage [{win_start:.2f}–{win_end:.2f}] {x_units}",
-    f"{percent_improvement_window:.1f}%"
+    f"{relative_advantage:.1f}%"
 )
 
 
@@ -276,16 +269,16 @@ x_fill_window, y_fill_window = make_fill_between(x_range, angleon_fit, comp_fit,
 
 fig = go.Figure()
 
-# window shade
+# Shaded window (defaults to full overlap)
 if x_fill_window.size:
     fig.add_trace(go.Scatter(
         x=x_fill_window, y=y_fill_window,
         fill="toself", fillcolor=f"rgba(150,150,150,{shade_alpha})",
         line=dict(color="rgba(0,0,0,0)"), hoverinfo="skip",
-        name=f"Advantage Area [{win_start:.2f}–{win_end:.2f}] {x_units}"
+        name=f"Shaded window [{win_start:.2f}–{win_end:.2f}] {x_units}"
     ))
 
-# lines (hovertemplate braces fixed)
+# Model lines (hovertemplate braces fixed)
 fig.add_trace(go.Scatter(
     x=x_range, y=angleon_fit,
     mode="lines",
@@ -301,7 +294,7 @@ fig.add_trace(go.Scatter(
     hovertemplate=f"{x_col}: %{{x:.2f}} {x_units}<br>Velocity: %{{y:.2f}} in/sec"
 ))
 
-# Raw points (optional) — show only if they're inside overlap
+# Raw points (optional) — inside overlap only
 if show_points:
     mask_a = (x_angleon >= xmin_common) & (x_angleon <= xmax_common)
     mask_c = (x_comp     >= xmin_common) & (x_comp     <= xmax_common)
@@ -318,14 +311,13 @@ if show_points:
             marker=dict(size=8, color="red")
         ))
 
-# annotation at window end
+# Optional annotation (relative advantage only)
 if x_fill_window.size:
     fig.add_annotation(
         x=float(win_end),
         y=float((np.nanmax(angleon_fit) + np.nanmax(comp_fit)) / 2),
-        text=(f"Advantage [{win_start:.2f}–{win_end:.2f}] {x_units} "
-              f"= {area_diff_window:.3f} in/sec·{x_units}"
-              f"<br>Relative = {percent_improvement_window:.1f}%"),
+        text=(f"Relative Advantage [{win_start:.2f}–{win_end:.2f}] {x_units}"
+              f"<br>{relative_advantage:.1f}%"),
         showarrow=False
     )
 
