@@ -14,12 +14,13 @@ import streamlit as st
 # Page Setup
 # ---------------------------
 st.set_page_config(page_title="N6 Belt — Tensile Pulls", layout="wide")
-st.title("N6 Belt — Tensile Pulls")
-st.caption(
-    "Lab tensile pulls summary. Toggle the metric to view its distribution. "
-    "Values copied from the report: Maximum Force (lbf), Tensile displacement at Maximum Force (in), "
-    "and Force at 0.05 in displacement (lbf)."
-)
+st.title("Tensile Testing — AngleOn™")
+st.caption("""
+Key Points: 
+INSTRON tensile testing of AngleOn™ raw material.
+-**Average Max Load:                   (Exceeded test parameters)**
+-**Average Displacement @ Max Load:    0.937in** 
+""")
 
 # ---------------------------
 # Fixed Dataset (from report)
