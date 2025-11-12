@@ -16,10 +16,6 @@ from scipy.optimize import fsolve
 st.set_page_config(page_title="Velocity vs Pressure", layout="wide")
 st.title("Object Velocity vs Pressure — AngleOn™ vs Competitor")
 
-# -------------------------
-# Sidebar Controls
-# -------------------------
-st.sidebar.header("Controls")
 st.caption("""
 Key Points:    
 AngleOn™ moves objects faster than competitor product across all object weights/pressures tested with the largest advantage in the lower pressure ranges. 
@@ -30,26 +26,12 @@ Please reference the table for specifics on object details. Weight range tested 
 default_path = "data/velocity_data.csv"
 csv_path = default_path
 poly_degree = 3  # cubic
-
-area_to_pressure = st.sidebar.number_input(
-    "Pressure window for relative advantage (psi)",
-    min_value=0.00, max_value=100.00, value=0.50, step=0.05, format="%.2f"
-)
-
-show_points = st.sidebar.checkbox("Show raw data points", value=False)  # default OFF
-shade_alpha = st.sidebar.slider("Shaded area opacity", 0.0, 1.0, 0.30, 0.05)
-
-st.sidebar.markdown("---")
-st.sidebar.caption("Tip: Set the window to **0.50 psi** to match your low-pressure comparison.")
-
-# Fixed line width
-line_width = 2
+line_width = 2   # fixed line width
 
 
 # =========================
 # Helpers
 # =========================
-
 def load_csv(_path: str) -> pd.DataFrame | None:
     if _path and os.path.exists(_path):
         return pd.read_csv(_path)
@@ -96,6 +78,55 @@ ok, msg = validate_columns(df)
 if not ok:
     st.error(msg)
     st.stop()
+
+
+# =========================
+# Sidebar Controls (after data load so we can bound controls)
+# =========================
+st.sidebar.header("Controls")
+
+# Axis toggle (DEFAULT = Weight)
+axis_choice = st.sidebar.radio(
+    "X-axis",
+    options=["Weight (lb)", "Pressure (psi)"],
+    index=0
+)
+
+# Resolve x column, units, defaults
+if axis_choice.startswith("Weight"):
+    x_col = "Weight"
+    x_units = "lb"
+    window_label = f"{x_col} window for relative advantage ({x_units})"
+    window_step = 0.5
+    window_max = float(df[x_col].max()) if x_col in df.columns else 100.0
+    window_default = min(5.0, window_max) if window_max > 0 else 5.0
+else:
+    x_col = "Pressure"
+    x_units = "psi"
+    window_label = f"{x_col} window for relative advantage ({x_units})"
+    window_step = 0.05
+    window_max = 100.0
+    window_default = 0.50
+
+# Ensure the chosen x-axis column exists
+if x_col not in df.columns:
+    st.error(f"Column '{x_col}' not found in the CSV. Available columns: {list(df.columns)}")
+    st.stop()
+
+area_to_var = st.sidebar.number_input(
+    window_label,
+    min_value=0.00, max_value=window_max,
+    value=float(window_default), step=float(window_step), format="%.2f"
+)
+
+show_points = st.sidebar.checkbox("Show raw data points", value=False)  # default OFF
+shade_alpha = st.sidebar.slider("Shaded area opacity", 0.0, 1.0, 0.30, 0.05)
+
+st.sidebar.markdown("---")
+st.sidebar.caption(
+    "Tip: For Pressure view, set the window to **0.50 psi** for low-pressure comparisons. "
+    "For Weight, **~5 lb** is a good starting window."
+)
 
 
 # =========================
@@ -153,9 +184,9 @@ if angleon.empty or competitor.empty:
     st.error("Need rows for both 'AngleOn™' and 'Competitor'.")
     st.stop()
 
-x_angleon = angleon["Pressure"].to_numpy()
+x_angleon = angleon[x_col].to_numpy()
 y_angleon = angleon["Velocity"].to_numpy()
-x_comp = competitor["Pressure"].to_numpy()
+x_comp = competitor[x_col].to_numpy()
 y_comp = competitor["Velocity"].to_numpy()
 
 f_angleon, _, _ = fit_poly_model(x_angleon, y_angleon, degree=poly_degree)
@@ -164,8 +195,12 @@ f_comp, _, _ = fit_poly_model(x_comp, y_comp, degree=poly_degree)
 def diff(x: float) -> float:
     return f_angleon(x) - f_comp(x)
 
-x_min = float(max(0.0, min(x_angleon.min(), x_comp.min()) - 0.2))
-x_max = float(max(x_angleon.max(), x_comp.max()) + 0.2)
+
+# =========================
+# Intersection (where fits meet) & Range
+# =========================
+x_min = float(max(0.0, min(np.nanmin(x_angleon), np.nanmin(x_comp)) - 0.2))
+x_max = float(max(np.nanmax(x_angleon), np.nanmax(x_comp)) + 0.2)
 x0_guess = 1.0 if x_min <= 1.0 <= x_max else (x_min + x_max) / 2
 
 try:
@@ -180,13 +215,15 @@ except Exception:
         i = sign_changes[0]
         x_intersect = float((grid[i] + grid[i + 1]) / 2)
     else:
-        x_intersect = float(min(x_max, 3.08))
+        # If no intersection, cap to a meaningful number within the observed range
+        x_intersect = float(min(x_max, (x_min + x_max) / 2))
 
 
 # =========================
 # Areas & Metrics
 # =========================
-to_x = float(area_to_pressure)
+to_x = float(area_to_var)
+
 area_diff_window = safe_quad(diff, 0.0, to_x)
 area_comp_window = safe_quad(lambda _x: f_comp(_x), 0.0, to_x)
 percent_improvement_window = (area_diff_window / area_comp_window * 100.0) if area_comp_window != 0 else 0.0
@@ -197,20 +234,20 @@ area_comp_intersect = safe_quad(lambda _x: f_comp(_x), 0.0, cap_x)
 percent_improvement_intersect = (area_diff_intersect / area_comp_intersect * 100.0) if area_comp_intersect != 0 else 0.0
 
 col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-col_m1.metric("Intersection (psi)", f"{x_intersect:.3f}")
-col_m2.metric(f"Advantage Area 0–{to_x:.2f} psi", f"{area_diff_window:.3f} in/sec·psi")
-col_m3.metric(f"Relative Advantage 0–{to_x:.2f} psi", f"{percent_improvement_window:.1f}%")
-col_m4.metric(f"Relative Advantage 0–{cap_x:.2f} psi", f"{percent_improvement_intersect:.1f}%")
+col_m1.metric(f"Intersection ({x_units})", f"{x_intersect:.3f}")
+col_m2.metric(f"Advantage Area 0–{to_x:.2f} {x_units}", f"{area_diff_window:.3f} in/sec·{x_units}")
+col_m3.metric(f"Relative Advantage 0–{to_x:.2f} {x_units}", f"{percent_improvement_window:.1f}%")
+col_m4.metric(f"Relative Advantage 0–{cap_x:.2f} {x_units}", f"{percent_improvement_intersect:.1f}%")
 
 
 # =========================
 # Plot
 # =========================
 plot_hi = float(max(cap_x + 0.5, x_max))
-pressure_range = np.linspace(0.0, plot_hi, 400)
+x_range = np.linspace(0.0, plot_hi, 400)
 
-angleon_fit = np.array([f_angleon(x) for x in pressure_range])
-comp_fit = np.array([f_comp(x) for x in pressure_range])
+angleon_fit = np.array([f_angleon(x) for x in x_range])
+comp_fit = np.array([f_comp(x) for x in x_range])
 
 def make_fill_between(x, y1, y2, limit):
     mask = x <= limit
@@ -221,11 +258,12 @@ def make_fill_between(x, y1, y2, limit):
     yf = np.concatenate([y1_m, y2_m[::-1]])
     return xf, yf
 
-x_fill_window, y_fill_window = make_fill_between(pressure_range, angleon_fit, comp_fit, to_x)
-x_fill_intersect, y_fill_intersect = make_fill_between(pressure_range, angleon_fit, comp_fit, cap_x)
+x_fill_window, y_fill_window = make_fill_between(x_range, angleon_fit, comp_fit, to_x)
+x_fill_intersect, y_fill_intersect = make_fill_between(x_range, angleon_fit, comp_fit, cap_x)
 
 fig = go.Figure()
 
+# Shaded advantage areas
 fig.add_trace(go.Scatter(
     x=x_fill_window,
     y=y_fill_window,
@@ -233,7 +271,7 @@ fig.add_trace(go.Scatter(
     fillcolor=f"rgba(150,150,150,{shade_alpha})",
     line=dict(color="rgba(0,0,0,0)"),
     hoverinfo="skip",
-    name=f"Advantage Area (0–{to_x:.2f} psi)"
+    name=f"Advantage Area (0–{to_x:.2f} {x_units})"
 ))
 
 if cap_x > to_x:
@@ -244,24 +282,26 @@ if cap_x > to_x:
         fillcolor=f"rgba(150,150,150,{max(0.05, shade_alpha/2)})",
         line=dict(color="rgba(0,0,0,0)"),
         hoverinfo="skip",
-        name=f"Advantage Area (0–{cap_x:.2f} psi)"
+        name=f"Advantage Area (0–{cap_x:.2f} {x_units})"
     ))
 
+# Model lines
 fig.add_trace(go.Scatter(
-    x=pressure_range, y=angleon_fit,
+    x=x_range, y=angleon_fit,
     mode="lines",
     name="AngleOn™ cubic fit",
     line=dict(width=line_width, color="blue"),
-    hovertemplate="Pressure: %{x:.2f} psi<br>Velocity: %{y:.2f} in/sec"
+    hovertemplate=f"{x_col}: %{x:.2f} {x_units}<br>Velocity: %{y:.2f} in/sec"
 ))
 fig.add_trace(go.Scatter(
-    x=pressure_range, y=comp_fit,
+    x=x_range, y=comp_fit,
     mode="lines",
     name="Competitor cubic fit",
     line=dict(width=line_width, color="red"),
-    hovertemplate="Pressure: %{x:.2f} psi<br>Velocity: %{y:.2f} in/sec"
+    hovertemplate=f"{x_col}: %{x:.2f} {x_units}<br>Velocity: %{y:.2f} in/sec"
 ))
 
+# Raw points (optional)
 if show_points:
     fig.add_trace(go.Scatter(
         x=x_angleon, y=y_angleon,
@@ -274,18 +314,18 @@ if show_points:
         marker=dict(size=8, color="red")
     ))
 
+# Annotation
 fig.add_annotation(
-    x=np.clip(to_x, 0, plot_hi),
-    y=(np.nanmax(angleon_fit) + np.nanmax(comp_fit)) / 2,
-    text=(
-        f"Advantage 0–{to_x:.2f} psi = {area_diff_window:.3f} in/sec·psi"
-        f"<br>Relative = {percent_improvement_window:.1f}%"
-    ),
+    x=float(np.clip(to_x, 0, plot_hi)),
+    y=float((np.nanmax(angleon_fit) + np.nanmax(comp_fit)) / 2),
+    text=(f"Advantage 0–{to_x:.2f} {x_units} = {area_diff_window:.3f} in/sec·{x_units}"
+          f"<br>Relative = {percent_improvement_window:.1f}%"),
     showarrow=False
 )
 
+# Layout
 fig.update_layout(
-    xaxis_title="Pressure (psi)",
+    xaxis_title=f"{x_col} ({x_units})",
     yaxis_title="Velocity (in/sec)",
     height=650,
     hovermode="x",
@@ -303,5 +343,3 @@ fig.update_layout(
 )
 
 st.plotly_chart(fig, use_container_width=True)
-
-
