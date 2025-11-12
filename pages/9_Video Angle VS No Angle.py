@@ -24,18 +24,34 @@ muted = st.sidebar.checkbox("Muted", value=False)
 
 # --- Description / Notes ---
 with st.expander("Test setup & notes", expanded=True):
-    st.markdown(
-        """
+    st.markdown("""
 - **System:** 36” linear vibratory feeder @ 120 VAC  
 - **Brushes:** AngleOn™ vs. Non-angled configuration  
 - **Observation:** Angle forces movement direction  
-        """
-    )
+    """)
+
+# --- Custom CSS to resize video ---
+st.markdown(
+    """
+    <style>
+    .video-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .video-container iframe {
+        width: 70%;  /* Adjust this to make video larger/smaller (e.g., 60%, 80%) */
+        height: auto;
+        aspect-ratio: 16 / 9;
+        border-radius: 12px;
+        box-shadow: 0 0 15px rgba(0,0,0,0.25);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # --- Video Display ---
+st.markdown('<div class="video-container">', unsafe_allow_html=True)
 st.video(video_url, autoplay=autoplay, muted=muted, loop=loop)
-
-# --- Footer ---
-#st.caption(
-    #"All testing performed on the same platform as the Velocity vs Pressure study."
-#)
+st.markdown('</div>', unsafe_allow_html=True)
