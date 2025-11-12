@@ -12,7 +12,8 @@ Key Points:
 -AngleOn™ Coverage Area:     19.5% / in²  
 -Competitor Coverage Area:   15.5% / in²  
 This is a tool used to explore how different combinations of brush density (epi²) values and monofilament diameters (in) affect brush coverage area per unit area of material. 
-This can be used to quantify object. Preloaded values represent actual material densities & monofilament diameters. Use sliders in side panel to explore different coverage arrangements.
+This can be used to quantify object engagement with brush and is useful in understanding differences in object movements between brush types. Preloaded values represent actual 
+material densities & monofilament diameters. Use sliders in side panel to explore different coverage arrangements.
 """)
 
 # Sidebar controls
