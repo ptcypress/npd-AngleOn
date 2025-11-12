@@ -18,21 +18,9 @@ video_url = st.sidebar.text_input(
     value="https://youtu.be/Eerrp0QNPqk",
     help="Paste a YouTube or Vimeo link here."
 )
-
-size_label = st.sidebar.select_slider(
-    "Display size",
-    options=["Compact (55%)", "Medium (65%)", "Wide (75%)"],
-    value="Medium (65%)",
-    help="Adjust the visual width of the embedded video."
-)
-
-# Map size label to column weights (smaller middle column → smaller video)
-size_to_cols = {
-    "Compact (55%)": [3, 2.4, 3],   # ~40% of page width
-    "Medium (65%)":  [2, 2.6, 2],   # ~46% of page width
-    "Wide (75%)":    [2, 3.2, 2],   # ~53% of page width
-}
-col_weights = size_to_cols[size_label]
+autoplay = st.sidebar.checkbox("Autoplay", value=True)
+loop = st.sidebar.checkbox("Loop", value=True)
+muted = st.sidebar.checkbox("Muted", value=False)
 
 # --- Description / Notes ---
 with st.expander("Test setup & notes", expanded=True):
@@ -44,11 +32,8 @@ with st.expander("Test setup & notes", expanded=True):
         """
     )
 
-# --- Video Display (Streamlit-native; sized via columns) ---
-left, mid, right = st.columns(col_weights)
-with mid:
-    # st.video() handles YouTube/Vimeo/MP4 and stays within the column width
-    st.video(video_url)
-
-# --- Footer (optional) ---
-# st.caption("All testing performed on the same platform as the Velocity vs Pressure study.")
+# --- Video Display (balanced width) ---
+# Wider middle column gives the video about 70–75% of page width.
+col_left, col_video, col_right = st.columns([1, 3, 1])
+with col_video:
+    st.video(video_url, autoplay=autoplay, muted=muted, loop=loop)
