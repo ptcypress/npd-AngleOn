@@ -23,7 +23,6 @@ def generate_monofilament_data(density, diameter, pattern="hex"):
     percent_coverage = total_area * 100
 
     positions = []
-
     if pattern == "hex":
         spacing = np.sqrt(2 / (np.sqrt(3) * density))
         y = 0
@@ -52,7 +51,7 @@ def generate_monofilament_data(density, diameter, pattern="hex"):
 # Draw the visual pattern
 # ---------------------------
 def draw_monofilament(positions, diameter, title, density, total_area, percent_coverage):
-    fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
+    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=150)  # smaller figure
 
     if len(positions) > 0:
         pt_per_inch = 72
@@ -63,20 +62,21 @@ def draw_monofilament(positions, diameter, title, density, total_area, percent_c
             s=size_pt_squared, edgecolor='black', facecolors='gray', linewidth=0.2
         )
 
-    ax.plot([0, 1, 1, 0, 0], [0, 0, 1, 1, 0], 'k-', lw=1)
+    # 1" bounding box
+    ax.plot([0, 1, 1, 0, 0], [0, 0, 1, 1, 0], 'k-', lw=0.8)
     ax.set_aspect('equal')
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.set_xticks([0, 0.5, 1])
     ax.set_yticks([0, 0.5, 1])
-    ax.set_xlabel("inches")
-    ax.set_ylabel("inches")
-    ax.set_title(f"{title}\n{density} ends/in², {diameter}\" dia")
+    ax.set_xlabel("inches", fontsize=9)
+    ax.set_ylabel("inches", fontsize=9)
+    ax.set_title(f"{title}\n{density} ends/in², {diameter}\" dia", fontsize=10)
 
     fig.text(
         0.5, 0.01,
         f"Monofilament area = {total_area:.4f} in²  •  Coverage = {percent_coverage:.1f}%",
-        ha='center', fontsize=9
+        ha='center', fontsize=8
     )
 
     plt.tight_layout()
@@ -88,15 +88,14 @@ def draw_monofilament(positions, diameter, title, density, total_area, percent_c
 # ---------------------------
 st.set_page_config(page_title="Monofilament Density Viewer", layout="wide")
 
-# Left-aligned header and description
+# Left-aligned header and controls
 st.markdown("## Monofilament Density Visualizer")
 st.caption(
-    "This scaled visualizer shows the coverage area of different brush types given their "
+    "Scaled visualizer showing coverage area of different brush types given their "
     "density (epi²) and monofilament diameter (in) within one square inch of brush. "
     "Presets use actual densities and diameters of brushes tested to date."
 )
 
-# Controls section (left-aligned)
 col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
     pattern = st.selectbox("Pattern Type", ["hex", "grid"])
@@ -109,7 +108,6 @@ with col3:
     else:
         density, diameter = PRESETS[preset]
 
-# Generate and display
 positions, total_area, percent_coverage = generate_monofilament_data(density, diameter, pattern)
 fig = draw_monofilament(positions, diameter, preset, density, total_area, percent_coverage)
 st.pyplot(fig, use_container_width=False)
