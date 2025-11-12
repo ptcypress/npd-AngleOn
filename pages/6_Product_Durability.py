@@ -10,11 +10,6 @@ import os
 st.set_page_config(page_title="Material Loss Over Time", layout="wide")
 st.title("Product Durability - AngleOn™ vs. Competitor")
 
-# Radio button to choose unit
-unit_choice = st.radio("Select Y-axis unit:", ["Mat'l Loss (%)", "Mat'l Loss (in)"])
-unit_label = "Cumulative Material Loss (%)" if unit_choice == "Mat'l Loss (%)" else "Cumulative Material Loss (in)"
-y_format = ".1f" if unit_choice == "Mat'l Loss (%)" else ".4f"
-
 # Load data
 csv_path = "data/product_durability.csv"
 if not os.path.exists(csv_path):
@@ -26,8 +21,7 @@ else:
     expected_cols = [
         "AngleOn™ Run Time (hrs)",
         "Competitor Product Run Time (hrs)",
-        "Mat'l Loss (%)",
-        "Mat'l Loss (in)"
+        "Mat'l Loss (%)"
     ]
 
     if not all(col in df.columns for col in expected_cols):
@@ -35,7 +29,7 @@ else:
         st.write("Available columns:", df.columns.tolist())
     else:
         # Extract relevant data
-        y_loss = df[unit_choice]
+        y_loss = df["Mat'l Loss (%)"]
         x_angleon = df["AngleOn™ Run Time (hrs)"]
         x_comp = df["Competitor Product Run Time (hrs)"]
 
@@ -79,7 +73,7 @@ else:
             mode='lines',
             name='AngleOn™',
             line=dict(color='blue', width=3),
-            hovertemplate='Hour: %{x:.2f}<br>Loss: %{y:' + y_format + '}'
+            hovertemplate='Hour: %{x:.2f}<br>Loss: %{y:.1f}%'
         ))
 
         # Competitor line
@@ -88,7 +82,7 @@ else:
             mode='lines',
             name='Competitor',
             line=dict(color='red', width=3),
-            hovertemplate='Hour: %{x:.2f}<br>Loss: %{y:' + y_format + '}'
+            hovertemplate='Hour: %{x:.2f}<br>Loss: %{y:.1f}%'
         ))
 
         # Annotation
@@ -104,7 +98,7 @@ else:
         # Layout and style
         fig.update_layout(
             xaxis_title="Runtime (Hours)",
-            yaxis_title=unit_label,
+            yaxis_title="Material Loss (%)",
             height=650,
             hovermode='x',
             legend=dict(
@@ -131,7 +125,7 @@ else:
                 spikecolor="lightgray",
                 spikethickness=0.7,
                 spikedash="dot",
-                tickformat=y_format
+                tickformat=".1f"
             ),
             hoverlabel=dict(
                 bgcolor="rgba(0,0,0,0)",
@@ -141,5 +135,8 @@ else:
         )
 
         # Text below chart
-        st.caption(f"This chart shows the cumulative **material loss** of AngleOn™ and Competitor product in terms of **{unit_choice}**. Lower values indicate greater durability.")
+        st.caption(
+            "This chart shows the cumulative **material loss (%)** of AngleOn™ and Competitor products over runtime. "
+            "Lower values indicate greater durability."
+        )
         st.plotly_chart(fig, use_container_width=True)
