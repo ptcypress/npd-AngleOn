@@ -14,7 +14,7 @@ import streamlit as st
 # Page Setup
 # ---------------------------
 st.set_page_config(page_title="Pile Pull Results", layout="wide")
-st.title("Pile Pull Results — AngleOn™")
+st.title("Tensile Testing — AngleOn™")
 st.caption("""
 Key Points:    
 INSTRON Tensile testing for AngleOn™ raw material.    
