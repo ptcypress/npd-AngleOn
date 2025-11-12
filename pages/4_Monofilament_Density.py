@@ -51,7 +51,7 @@ def generate_monofilament_data(density, diameter, pattern="hex"):
 # Draw the visual pattern
 # ---------------------------
 def draw_monofilament(positions, diameter, title, density, total_area, percent_coverage):
-    fig, ax = plt.subplots(figsize=(4.2, 4.2), dpi=150)  # smaller figure
+    fig, ax = plt.subplots(figsize=(3.8, 3.8), dpi=160)  # slightly smaller but sharper
 
     if len(positions) > 0:
         pt_per_inch = 72
@@ -62,21 +62,20 @@ def draw_monofilament(positions, diameter, title, density, total_area, percent_c
             s=size_pt_squared, edgecolor='black', facecolors='gray', linewidth=0.2
         )
 
-    # 1" bounding box
     ax.plot([0, 1, 1, 0, 0], [0, 0, 1, 1, 0], 'k-', lw=0.8)
     ax.set_aspect('equal')
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.set_xticks([0, 0.5, 1])
     ax.set_yticks([0, 0.5, 1])
-    ax.set_xlabel("inches", fontsize=9)
-    ax.set_ylabel("inches", fontsize=9)
-    ax.set_title(f"{title}\n{density} ends/in², {diameter}\" dia", fontsize=10)
+    ax.set_xlabel("inches", fontsize=8)
+    ax.set_ylabel("inches", fontsize=8)
+    ax.set_title(f"{title}\n{density} ends/in², {diameter}\" dia", fontsize=9, pad=8)
 
     fig.text(
         0.5, 0.01,
         f"Monofilament area = {total_area:.4f} in²  •  Coverage = {percent_coverage:.1f}%",
-        ha='center', fontsize=8
+        ha='center', fontsize=7
     )
 
     plt.tight_layout()
@@ -88,7 +87,6 @@ def draw_monofilament(positions, diameter, title, density, total_area, percent_c
 # ---------------------------
 st.set_page_config(page_title="Monofilament Density Viewer", layout="wide")
 
-# Left-aligned header and controls
 st.markdown("## Monofilament Density Visualizer")
 st.caption(
     "Scaled visualizer showing coverage area of different brush types given their "
@@ -110,4 +108,6 @@ with col3:
 
 positions, total_area, percent_coverage = generate_monofilament_data(density, diameter, pattern)
 fig = draw_monofilament(positions, diameter, preset, density, total_area, percent_coverage)
+
+# center visually without stretching
 st.pyplot(fig, use_container_width=False)
