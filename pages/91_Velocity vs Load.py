@@ -281,7 +281,7 @@ fig.add_trace(go.Scatter(
 # Stall markers (first y<=0 crossing)
 if show_stall_lines:
     stallA = stall_from_roots(curve_a)
-    stallB = fstall_from_roots(curve_b)
+    stallB = stall_from_roots(curve_b)
 
     if stallA is not None and xmin_common <= stallA <= xmax_common:
         fig.add_vline(
