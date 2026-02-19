@@ -105,46 +105,31 @@ def fmt_equation(name: str) -> str:
         f"+ ({c['a3']:.4f})·P³"
     )
 
-def find_stall_pressure(name: str, clamp_below_zero: bool) -> float | None:
+def stall_from_roots(name: str) -> float | None:
     """
-    Returns first pressure where curve crosses <=0 within its domain.
-    If clamp_below_zero is True, we treat y<=0 as stall; otherwise still uses y<=0.
-    Uses a coarse scan + bisection. Returns None if no crossing in domain.
+    Returns the smallest real root >= domain_min where V(P)=0.
+    If no such root exists, returns None.
     """
     spec = CURVE_META[name]
     c = spec["coeffs"]
-    lo, hi = spec["domain"]
+    dom_lo, dom_hi = spec["domain"]
 
-    # Scan
-    xs = np.linspace(lo, hi, 400)
-    ys = np.array([cubic_eval(x, c) for x in xs])
+    # Polynomial: a3*x^3 + a2*x^2 + a1*x + a0 = 0
+    coeffs = [c["a3"], c["a2"], c["a1"], c["a0"]]
+    roots = np.roots(coeffs)
 
-    # If always > 0, no stall in domain
-    if np.all(ys > 0):
+    real_roots = []
+    for r in roots:
+        if abs(r.imag) < 1e-8:
+            xr = float(r.real)
+            if xr >= dom_lo:
+                real_roots.append(xr)
+
+    if not real_roots:
         return None
 
-    # Find first crossing index where y <= 0
-    idx = np.where(ys <= 0)[0]
-    if len(idx) == 0:
-        return None
+    return min(real_roots)
 
-    i = int(idx[0])
-    if i == 0:
-        return float(xs[0])
-
-    a, b = float(xs[i - 1]), float(xs[i])
-    fa, fb = cubic_eval(a, c), cubic_eval(b, c)
-
-    # Bisection
-    for _ in range(40):
-        m = 0.5 * (a + b)
-        fm = cubic_eval(m, c)
-        if fm <= 0:
-            b, fb = m, fm
-        else:
-            a, fa = m, fm
-
-    return float(b)
 
 # =========================
 # Sidebar Controls
@@ -295,8 +280,8 @@ fig.add_trace(go.Scatter(
 
 # Stall markers (first y<=0 crossing)
 if show_stall_lines:
-    stallA = find_stall_pressure(curve_a, clamp_below_zero=clamp_below_zero)
-    stallB = find_stall_pressure(curve_b, clamp_below_zero=clamp_below_zero)
+    stallA = stall_from_roots(curve_a)
+    stallB = fstall_from_roots(curve_b)
 
     if stallA is not None and xmin_common <= stallA <= xmax_common:
         fig.add_vline(
