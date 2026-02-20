@@ -6,11 +6,12 @@ from scipy.integrate import quad
 # =========================
 # Page Setup
 # =========================
-st.set_page_config(page_title="Velocity vs Load & Pressure", layout="wide")
-st.title("Velocity vs Pressure — Cubic Fit Curves (Extended to Stall)")
+st.set_page_config(page_title="Velocity vs Load", layout="wide")
+st.title("Velocity vs Load — Cubic Fit Curves")
 st.caption(
-    "Curves are plotted continuously from their minimum valid pressure until the cubic reaches V=0 (stall). "
-    "No dashed extrapolation — domains are automatically extended to the stall point."
+    "Objects of varying mass were conveyed along a linear vibratory feeder using different brush constructions." 
+    "Object velocity was measured as a function of applied normal load (pressure), and cubic regression models were used to"
+    "describe velocity–load behavior up to stall (V = 0)."
 )
 
 # =========================
