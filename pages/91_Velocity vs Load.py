@@ -236,7 +236,7 @@ if mode.startswith("Compare"):
 # =========================
 # Plot
 # =========================
-st.subheader("Velocity vs Pressure (Cubic Fits)")
+st.subheader("Velocity vs Object Pressure")
 
 fig = go.Figure()
 
