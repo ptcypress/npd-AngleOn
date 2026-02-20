@@ -45,6 +45,11 @@ CURVES = {
             "domain_min": 0.166,
             "notes": "XT10250-250 Rev.1 cubic fit",
         },
+        "XT06250-250 Rev.1": {
+            "coeffs": {"a0": 3.9049, "a1": -7.1959, "a2": 6.2119, "a3": -1.8053},
+            "domain_min": 0.166,
+            "notes": "XT06250-250 Rev.1 cubic fit",
+        },
         "XT16125-625 Rev.1": {
             "coeffs": {"a0": 3.3280, "a1": -2.1110, "a2": 1.1840, "a3": -0.2386},
             "domain_min": 0.166,
