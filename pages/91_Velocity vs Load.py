@@ -35,31 +35,36 @@ CURVES = {
         },
     },
     "XT": {
-        "XT10-250 Rev.1": {
+        "XT10250-625 Rev.1": {
             "coeffs": {"a0": 6.2710, "a1": -12.0900, "a2": 13.5200, "a3": -5.0130},
             "domain_min": 0.166,
-            "notes": "XT10-250 Rev.1 cubic fit",
+            "notes": "XT10250-625 Rev.1 cubic fit",
         },
-        "XT16-125 Rev.1": {
+        #"XT10250-250 Rev.1": {
+            #"coeffs": {"a0": 3.3280, "a1": -2.1110, "a2": 1.1840, "a3": -0.2386},
+            #"domain_min": 0.166,
+            #"notes": "XT10250-250 Rev.1 cubic fit",
+        },
+        "XT16125-625 Rev.1": {
             "coeffs": {"a0": 3.3280, "a1": -2.1110, "a2": 1.1840, "a3": -0.2386},
             "domain_min": 0.166,
-            "notes": "XT16-125 Rev.1 cubic fit",
+            "notes": "XT16125-625 Rev.1 cubic fit",
         },
-        "XT16-125 Rev.2": {
+        "XT16125-625 Rev.2": {
             "coeffs": {"a0": 3.4984, "a1": -6.0848, "a2": 5.3119, "a3": -1.5377},
             "domain_min": 0.166,
-            "notes": "XT16-125 Rev.2 cubic fit",
+            "notes": "XT16125-625 Rev.2 cubic fit",
         },
-        "XT16-115 Rev.1": {
+        "XT16115-625 Rev.1": {
             "coeffs": {"a0": 3.3025, "a1": -5.8152, "a2": 4.8504, "a3": -1.3582},
             "domain_min": 0.166,
-            "notes": "XT16-115 Rev.1 cubic fit",
+            "notes": "XT16115-625 Rev.1 cubic fit",
         },
         # renamed: removed "(Projected)" per your request
-        "XT16-105 Rev.1": {
+        "XT16105-625 Rev.1": {
             "coeffs": {"a0": 3.1066, "a1": -5.5456, "a2": 4.3889, "a3": -1.1787},
             "domain_min": 0.166,
-            "notes": "XT16-105 Rev.1 cubic fit",
+            "notes": "XT16105-625 Rev.1 cubic fit",
         },
     },
 }
