@@ -7,7 +7,7 @@ from scipy.integrate import quad
 # Page Setup
 # =========================
 st.set_page_config(page_title="Velocity vs Load", layout="wide")
-st.title("Velocity vs Load — Cubic Fit Curves")
+st.title("Velocity vs Load — AngleOn™ & AngleOn XT")
 st.caption(
     "Objects of varying mass were conveyed along a linear vibratory feeder using different brush constructions. " 
     "Object velocity was measured as a function of applied normal load (pressure), and cubic regression models were used to "
