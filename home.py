@@ -6,7 +6,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("New Product Development - AngleOn™")
+st.title("New Product Development - AngleOn™ & AngleOn XT")
 st.markdown("---")
 
 st.markdown("""
@@ -24,10 +24,11 @@ Use the sidebar on the left to navigate between apps:
     -  Accelerated Wear Test 
     -  Product Durability
     -  Velocity Boxplot
-    -  Velocity vs Mass & Pressure
+    -  Velocity vs Load
     -  Video AngleOn™ vs UltraNylon
 ---
 """)
+
 
 
 
