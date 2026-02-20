@@ -7,7 +7,7 @@ from scipy.integrate import quad
 # Page Setup
 # =========================
 st.set_page_config(page_title="Velocity vs Load & Pressure", layout="wide")
-st.title("Velocity vs Pressure — Model Curves (Cubic Fits)")
+st.title("Velocity vs Pressure - AngleOn™ & XT Angle Brushes")
 st.caption(
     "Model-space comparison using validated cubic regression curves. "
     "Solid lines = validated domain. Dashed lines = extrapolated to stall (y=0) when stall occurs beyond domain."
@@ -253,7 +253,7 @@ if mode.startswith("Compare"):
 # =========================
 # Plot (all curves or selected)
 # =========================
-st.subheader("Velocity vs Pressure (Cubic Fits)")
+st.subheader("Velocity vs Pressure")
 
 fig = go.Figure()
 
