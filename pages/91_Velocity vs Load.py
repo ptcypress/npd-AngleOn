@@ -233,6 +233,13 @@ def make_fig(title: str, y_title: str):
             showgrid=True, gridcolor="rgba(220,220,220,0.4)"
         ),
     )
+    # Add shaded load bands if x-axis is Pressure
+    fig = add_pressure_bands(
+        fig, x_col, use_bands,
+        P_normal_lo, P_normal_hi,
+        P_trans_lo, P_trans_hi,
+        P_avoid_lo
+    )
     return fig
 
 def add_curve(fig, name: str, y_func, y_label: str):
