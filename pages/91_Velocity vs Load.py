@@ -118,6 +118,18 @@ def effective_domain(name: str) -> tuple[float, float]:
 # =========================
 st.sidebar.header("Controls")
 
+st.sidebar.subheader("Load bands (Pressure, lb/in²)")
+
+use_bands = st.sidebar.checkbox("Show load bands", value=True)
+
+P_normal_lo = st.sidebar.number_input("Normal band start", value=0.60, step=0.05)
+P_normal_hi = st.sidebar.number_input("Normal band end",   value=1.30, step=0.05)
+
+P_trans_lo  = st.sidebar.number_input("Transient band start", value=1.30, step=0.05)
+P_trans_hi  = st.sidebar.number_input("Transient band end",   value=2.00, step=0.05)
+
+P_avoid_lo  = st.sidebar.number_input("Avoid band start", value=2.00, step=0.05)
+
 families = st.sidebar.multiselect("Families", options=["Angle", "XT"], default=["Angle", "XT"])
 available = [c for c in ALL_CURVES if CURVE_META[c]["family"] in families]
 if not available:
@@ -154,6 +166,52 @@ if show_d2:
     tab_names.append("2nd Derivative (d²V/dP²) vs P")
 
 tabs = st.tabs(tab_names)
+
+def add_pressure_bands(fig, x_col, show, Pn_lo, Pn_hi, Pt_lo, Pt_hi, Pa_lo):
+    """Add shaded load bands to Plotly figure when x-axis is Pressure."""
+    if (not show) or (x_col != "Pressure"):
+        return fig
+
+    # Normal band (green)
+    fig.add_vrect(
+        x0=Pn_lo, x1=Pn_hi,
+        fillcolor="rgba(0, 200, 0, 0.14)",
+        line_width=0,
+        layer="below",
+        annotation_text="Normal",
+        annotation_position="top left",
+        annotation_font_size=11
+    )
+
+    # Transient band (yellow)
+    fig.add_vrect(
+        x0=Pt_lo, x1=Pt_hi,
+        fillcolor="rgba(255, 215, 0, 0.14)",
+        line_width=0,
+        layer="below",
+        annotation_text="Transient",
+        annotation_position="top left",
+        annotation_font_size=11
+    )
+
+    # Avoid band (red) — extend to right edge of plot automatically
+    xmax = fig.layout.xaxis.range[1] if fig.layout.xaxis.range else None
+    if xmax is None:
+        # if range isn't explicitly set, use current data max
+        # (Plotly will still shade reasonably even if xmax isn't perfect)
+        xmax = Pa_lo + 10
+
+    fig.add_vrect(
+        x0=Pa_lo, x1=xmax,
+        fillcolor="rgba(255, 0, 0, 0.08)",
+        line_width=0,
+        layer="below",
+        annotation_text="Avoid",
+        annotation_position="top left",
+        annotation_font_size=11
+    )
+
+    return fig
 
 def make_fig(title: str, y_title: str):
     fig = go.Figure()
