@@ -12,12 +12,12 @@ from scipy.integrate import quad
 # Streamlit Page Setup
 # =========================
 st.set_page_config(page_title="Velocity vs Load", layout="wide")
-st.title("Object Velocity vs Load — AngleOn™ vs Competitor")
+st.title("Object Velocity vs Load — Cubic Fits + Load Bands")
 
 st.caption("""
-This is a benchmarking time-study on a linear vibratory feeder. Objects of different weights are placed on each brush and timed over a fixed travel distance.
-Measured time is converted to velocity, and object load is expressed as pressure (lb/in²). The purpose is not just “speed”, but understanding how stable/robust
-each brush is as load increases (how gracefully performance degrades and where it transitions toward stall).
+Benchmarking time-study on a linear vibratory feeder: objects of different weights are placed on each brush and timed over a fixed travel distance.
+Time is converted to velocity, and object load is expressed as pressure (lb/in²). This view emphasizes robustness as load increases (stability and how
+gracefully performance degrades), not just peak speed.
 """)
 
 # =========================
@@ -48,7 +48,7 @@ st.sidebar.header("Controls")
 axis_choice = st.sidebar.radio(
     "X-axis",
     options=["Weight (lb)", "Pressure (lb/in²)"],
-    index=1  # default to Pressure since bands are pressure-based
+    index=1  # default to Pressure (bands are pressure-based)
 )
 
 x_col = "Weight" if axis_choice.startswith("Weight") else "Pressure"
@@ -56,6 +56,21 @@ x_units = "lb" if x_col == "Weight" else "lb/in²"
 
 if x_col not in df.columns:
     st.error(f"Column '{x_col}' not found in the CSV. Available columns: {list(df.columns)}")
+    st.stop()
+
+# Brush selection for plotting
+st.sidebar.subheader("Brushes to plot")
+brush_values = sorted(df["Brush"].dropna().unique().tolist())
+default_plot = [b for b in ["AngleOn™", "Competitor"] if b in brush_values] or brush_values[:2]
+
+selected_plot_brushes = st.sidebar.multiselect(
+    "Select brushes",
+    options=brush_values,
+    default=default_plot
+)
+
+if not selected_plot_brushes:
+    st.error("Select at least one brush to plot.")
     st.stop()
 
 # =========================
@@ -92,13 +107,6 @@ def safe_quad(func, a, b):
     val, _ = quad(func, lo, hi)
     return val
 
-def common_domain(x1, x2):
-    xmin = float(max(np.nanmin(x1), np.nanmin(x2)))
-    xmax = float(min(np.nanmax(x1), np.nanmax(x2)))
-    if xmax < xmin:
-        raise ValueError("No overlapping domain between the two selected brushes.")
-    return xmin, xmax
-
 def clipped(func, lo, hi):
     def g(x):
         if x < lo:
@@ -109,10 +117,7 @@ def clipped(func, lo, hi):
     return g
 
 def add_pressure_bands(fig, x_col, show, x_max, Pn_lo, Pn_hi, Pt_lo, Pt_hi, Pa_lo):
-    """
-    Add shaded load bands to Plotly figure when x-axis is Pressure.
-    x_max should be the max x shown on the plot so the 'Avoid' band can extend to the edge.
-    """
+    """Add shaded load bands to Plotly figure when x-axis is Pressure."""
     if (not show) or (x_col != "Pressure"):
         return fig
 
@@ -138,7 +143,7 @@ def add_pressure_bands(fig, x_col, show, x_max, Pn_lo, Pn_hi, Pt_lo, Pt_hi, Pa_l
         annotation_font_size=11
     )
 
-    # Avoid band (red) — extend to the plotted max
+    # Avoid band (red) — extend to plotted max
     fig.add_vrect(
         x0=Pa_lo, x1=float(x_max),
         fillcolor="rgba(255, 0, 0, 0.08)",
@@ -152,38 +157,46 @@ def add_pressure_bands(fig, x_col, show, x_max, Pn_lo, Pn_hi, Pt_lo, Pt_hi, Pa_l
     return fig
 
 # =========================
-# Prep data (AngleOn™ vs Competitor baseline)
+# Fit models per selected brush (no extrapolation)
 # =========================
-angleon = df[df["Brush"].str.strip() == "AngleOn™"].copy()
-competitor = df[df["Brush"].str.strip() == "Competitor"].copy()
+df_plot = df[df["Brush"].isin(selected_plot_brushes)].copy()
 
-if angleon.empty or competitor.empty:
-    st.error("Need rows for both 'AngleOn™' and 'Competitor' in the CSV.")
+models = {}
+domains = {}
+
+for b in selected_plot_brushes:
+    sub = df_plot[df_plot["Brush"] == b]
+    x = sub[x_col].to_numpy(dtype=float)
+    y = sub["Velocity"].to_numpy(dtype=float)
+
+    # Need enough unique x points for a meaningful cubic fit
+    if len(np.unique(x)) < 4:
+        st.warning(f"Not enough unique {x_col} points to fit cubic for: {b}")
+        continue
+
+    f = fit_poly_model(x, y, degree=poly_degree)
+    models[b] = f
+    domains[b] = (float(np.nanmin(x)), float(np.nanmax(x)))
+
+if not models:
+    st.error("No valid brushes to fit. Check selections or data.")
     st.stop()
 
-x_angleon = angleon[x_col].to_numpy(dtype=float)
-y_angleon = angleon["Velocity"].to_numpy(dtype=float)
+# Common domain across ALL selected brushes (strict: prevents extrapolation)
+xmin_common = max(d[0] for d in domains.values())
+xmax_common = min(d[1] for d in domains.values())
 
-x_comp = competitor[x_col].to_numpy(dtype=float)
-y_comp = competitor["Velocity"].to_numpy(dtype=float)
-
-f_angleon = fit_poly_model(x_angleon, y_angleon, degree=poly_degree)
-f_comp = fit_poly_model(x_comp, y_comp, degree=poly_degree)
-
-try:
-    xmin_common, xmax_common = common_domain(x_angleon, x_comp)
-except ValueError as e:
-    st.error(str(e))
+if xmax_common <= xmin_common:
+    st.error(
+        "Selected brushes have no overlapping x-domain (no-extrapolation). "
+        "Choose different brushes or switch x-axis."
+    )
     st.stop()
 
-f_angleon_c = clipped(f_angleon, xmin_common, xmax_common)
-f_comp_c = clipped(f_comp, xmin_common, xmax_common)
-
-def diff(x):
-    return f_angleon_c(x) - f_comp_c(x)
+models_c = {b: clipped(f, xmin_common, xmax_common) for b, f in models.items()}
 
 # =========================
-# Range selection
+# Range selection (for optional advantage metric)
 # =========================
 st.sidebar.markdown("---")
 full_range = float(xmax_common - xmin_common)
@@ -198,107 +211,71 @@ low_val, high_val = st.sidebar.slider(
 )
 
 # =========================
-# Relative / Point Advantage
+# Optional: Advantage metric (any two brushes)
 # =========================
-if abs(high_val - low_val) <= 1e-12:
-    x0 = float(low_val)
-    fa, fc = f_angleon_c(x0), f_comp_c(x0)
-    point_advantage = (fa - fc) / fc * 100.0 if fc != 0 else np.nan
-    st.metric(
-        f"Point Advantage at {x0:.2f} {x_units}",
-        f"{point_advantage:.1f}%" if np.isfinite(point_advantage) else "—"
-    )
-else:
-    lo, hi = float(min(low_val, high_val)), float(max(low_val, high_val))
-    area_diff = safe_quad(diff, lo, hi)
-    area_comp = safe_quad(lambda _x: f_comp_c(_x), lo, hi)
-    rel_adv = (area_diff / area_comp * 100.0) if area_comp != 0 else 0.0
-    st.metric(f"Relative Advantage [{lo:.2f}–{hi:.2f}] {x_units}", f"{rel_adv:.1f}%")
+st.sidebar.subheader("Advantage comparison (optional)")
+compare_mode = st.sidebar.checkbox("Show advantage metric", value=("AngleOn™" in models_c and "Competitor" in models_c))
+
+if compare_mode:
+    keys = list(models_c.keys())
+    # Defaults: AngleOn vs Competitor if present
+    default_base = keys.index("AngleOn™") if "AngleOn™" in keys else 0
+    default_comp = keys.index("Competitor") if "Competitor" in keys else min(1, len(keys) - 1)
+
+    baseline = st.sidebar.selectbox("Baseline", options=keys, index=default_base)
+    compare_to = st.sidebar.selectbox("Compare to", options=keys, index=default_comp)
+
+    f_base = models_c[baseline]
+    f_comp = models_c[compare_to]
+
+    def diff(x):
+        return f_base(x) - f_comp(x)
+
+    if abs(high_val - low_val) <= 1e-12:
+        x0 = float(low_val)
+        fb, fc = f_base(x0), f_comp(x0)
+        point_advantage = (fb - fc) / fc * 100.0 if fc != 0 else np.nan
+        st.metric(
+            f"Point Advantage: {baseline} vs {compare_to} @ {x0:.2f} {x_units}",
+            f"{point_advantage:.1f}%" if np.isfinite(point_advantage) else "—"
+        )
+    else:
+        lo, hi = float(min(low_val, high_val)), float(max(low_val, high_val))
+        area_diff = safe_quad(diff, lo, hi)
+        area_comp = safe_quad(lambda _x: f_comp(_x), lo, hi)
+        rel_adv = (area_diff / area_comp * 100.0) if area_comp != 0 else 0.0
+        st.metric(
+            f"Relative Advantage: {baseline} vs {compare_to} [{lo:.2f}–{hi:.2f}] {x_units}",
+            f"{rel_adv:.1f}%"
+        )
 
 # =========================
-# Plot
+# Plot: Cubic fits for all selected brushes
 # =========================
-x_range = np.linspace(xmin_common, xmax_common, 400)
-angleon_fit = np.array([f_angleon_c(x) for x in x_range])
-comp_fit = np.array([f_comp_c(x) for x in x_range])
+x_range = np.linspace(xmin_common, xmax_common, 500)
 
 fig = go.Figure()
 
-# Highlight range (if interval)
-if abs(high_val - low_val) > 1e-12:
-    mask = (x_range >= low_val) & (x_range <= high_val)
-    if np.any(mask):
-        xf = np.concatenate([x_range[mask], x_range[mask][::-1]])
-        yf = np.concatenate([angleon_fit[mask], comp_fit[mask][::-1]])
-        fig.add_trace(go.Scatter(
-            x=xf, y=yf,
-            fill="toself",
-            fillcolor="rgba(150,150,150,0.25)",
-            line=dict(color="rgba(0,0,0,0)"),
-            hoverinfo="skip",
-            name="Analysis window"
-        ))
-else:
-    x0 = float(low_val)
-    y_mid = (f_angleon_c(x0) + f_comp_c(x0)) / 2.0
+# Plot all selected brush cubic fits
+for b in selected_plot_brushes:
+    if b not in models_c:
+        continue
+    y_fit = np.array([models_c[b](x) for x in x_range])
     fig.add_trace(go.Scatter(
-        x=[x0], y=[y_mid],
-        mode="markers",
-        name=f"Point @ {x0:.2f} {x_units}",
-        marker=dict(size=10),
-        hoverinfo="skip"
+        x=x_range, y=y_fit,
+        mode="lines",
+        name=f"{b} cubic fit",
+        line=dict(width=line_width)
     ))
-
-# Lines
-fig.add_trace(go.Scatter(
-    x=x_range, y=angleon_fit,
-    mode="lines",
-    name="AngleOn™ cubic fit",
-    line=dict(width=line_width, color="blue"),
-))
-fig.add_trace(go.Scatter(
-    x=x_range, y=comp_fit,
-    mode="lines",
-    name="Competitor cubic fit",
-    line=dict(width=line_width, color="red"),
-))
 
 fig.update_layout(
     xaxis_title=f"{x_col} ({x_units})",
     yaxis_title="Velocity (in/sec)",
     height=650,
     hovermode="x",
-    legend=dict(
-        yanchor="top", y=0.99,
-        xanchor="left", x=0.72
-    ),
-    xaxis=dict(
-        showspikes=True,
-        spikemode="across",
-        spikesnap="cursor",
-        showline=True,
-        spikecolor="lightgray",
-        spikethickness=0.7,
-        spikedash="dot",
-        showgrid=True,
-        gridcolor="rgba(220,220,220,0.4)"
-    ),
-    yaxis=dict(
-        showspikes=True,
-        spikemode="across",
-        spikesnap="cursor",
-        showline=True,
-        spikecolor="lightgray",
-        spikethickness=0.7,
-        spikedash="dot",
-        showgrid=True,
-        gridcolor="rgba(220,220,220,0.4)"
-    ),
-    hoverlabel=dict(
-        bgcolor="rgba(0,0,0,0)",
-        font_size=12,
-        font_family="Arial"
-    )
+    legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.72),
+    xaxis=dict(showgrid=True, gridcolor="rgba(220,220,220,0.4)"),
+    yaxis=dict(showgrid=True, gridcolor="rgba(220,220,220,0.4)")
 )
 
 # Add shaded load bands if x-axis is Pressure
@@ -307,44 +284,40 @@ fig = add_pressure_bands(
     x_col=x_col,
     show=use_bands,
     x_max=float(np.nanmax(x_range)),
-    Pn_lo=P_normal_lo,
-    Pn_hi=P_normal_hi,
-    Pt_lo=P_trans_lo,
-    Pt_hi=P_trans_hi,
-    Pa_lo=P_avoid_lo,
+    Pn_lo=P_normal_lo, Pn_hi=P_normal_hi,
+    Pt_lo=P_trans_lo, Pt_hi=P_trans_hi,
+    Pa_lo=P_avoid_lo
 )
 
 st.plotly_chart(fig, use_container_width=True)
 
-# Optional: show the band definitions under the plot (only meaningful for pressure view)
+# Show band definitions under the plot (only meaningful for pressure view)
 if x_col == "Pressure":
     st.caption(f"""
 **Load band lens (Pressure):**
-- **Normal:** {P_normal_lo:.2f} to {P_normal_hi:.2f} lb/in²
-- **Transient:** {P_trans_lo:.2f} to {P_trans_hi:.2f} lb/in²
-- **Avoid:** > {P_avoid_lo:.2f} lb/in² (brush-dependent; near-failure behavior)
+- **Normal:** {P_normal_lo:.2f} to {P_normal_hi:.2f} lb/in² (typical day-to-day operation)
+- **Transient:** {P_trans_lo:.2f} to {P_trans_hi:.2f} lb/in² (orientation, stacking, tuning drift)
+- **Avoid:** > {P_avoid_lo:.2f} lb/in² (unstable / near-failure region; brush-dependent)
 """)
 
 # =========================
-# CSV Data (moved below chart)
+# CSV Data (below chart)
 # =========================
 with st.expander("Show CSV data / object details", expanded=False):
     col_a, col_b, col_c = st.columns([1.2, 1, 1])
-    brush_values = sorted(df["Brush"].dropna().unique().tolist())
-    default_brushes = [b for b in brush_values if b in ["AngleOn™", "Competitor"]]
 
     with col_a:
-        selected_brushes = st.multiselect(
-            "Filter: Brush",
+        selected_table_brushes = st.multiselect(
+            "Filter table: Brush",
             options=brush_values,
-            default=default_brushes
+            default=default_plot
         )
     with col_b:
         sort_by = st.selectbox("Sort by", options=list(df.columns))
     with col_c:
         ascending = st.checkbox("Ascending sort", value=True)
 
-    df_view = df[df["Brush"].isin(selected_brushes)].copy() if selected_brushes else df.copy()
+    df_view = df[df["Brush"].isin(selected_table_brushes)].copy() if selected_table_brushes else df.copy()
 
     q = st.text_input("Quick search (matches text columns)", "")
     if q:
