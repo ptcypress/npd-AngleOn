@@ -1,174 +1,118 @@
+import os
 import numpy as np
+import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
-# =========================
-# Page Setup
-# =========================
-st.set_page_config(page_title="Velocity Curves & Derivatives", layout="wide")
-st.title("Velocity Curves & Derivatives — Cubic Fits")
-st.caption(
-    "This page visualizes cubic velocity–pressure models and their derivatives. "
-    "Domains are automatically extended from minimum valid pressure to stall (V=0) so curves naturally terminate at zero."
-)
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from scipy.integrate import quad
 
 # =========================
-# Curve Registry
-# y = a0 + a1*x + a2*x^2 + a3*x^3
-# x = Pressure (lb/in²)
-# y = Velocity (in/s)
-# domain_min = minimum valid x
+# Streamlit Page Setup
 # =========================
-CURVES = {
-    "Angle": {
-        "AngleOn™": {
-            "coeffs": {"a0": 4.5210, "a1": -3.9740, "a2": 1.9270, "a3": -0.3569},
-            "domain_min": 0.167,
-        },
-        "Competitor": {
-            "coeffs": {"a0": 3.0780, "a1": -2.4730, "a2": 1.3470, "a3": -0.2774},
-            "domain_min": 0.166,
-        },
-    },
-    "XT": {
-        "XT10-250 Rev.1": {
-            "coeffs": {"a0": 6.2710, "a1": -12.0900, "a2": 13.5200, "a3": -5.0130},
-            "domain_min": 0.166,
-        },
-        "XT16-125 Rev.1": {
-            "coeffs": {"a0": 3.3280, "a1": -2.1110, "a2": 1.1840, "a3": -0.2386},
-            "domain_min": 0.166,
-        },
-        "XT16-125 Rev.2": {
-            "coeffs": {"a0": 3.4984, "a1": -6.0848, "a2": 5.3119, "a3": -1.5377},
-            "domain_min": 0.166,
-        },
-        "XT16-115 Rev.1": {
-            "coeffs": {"a0": 3.3025, "a1": -5.8152, "a2": 4.8504, "a3": -1.3582},
-            "domain_min": 0.166,
-        },
-        "XT16-105 Rev.1": {  # removed "Projected" per your earlier request
-            "coeffs": {"a0": 3.1066, "a1": -5.5456, "a2": 4.3889, "a3": -1.1787},
-            "domain_min": 0.166,
-        },
-        # Add additional curves here as needed:
-        # "XT16-XXX Rev.X": {"coeffs": {...}, "domain_min": 0.166},
-    },
-}
+st.set_page_config(page_title="Velocity vs Load", layout="wide")
+st.title("Object Velocity vs Load — AngleOn™ vs Competitor")
 
-# Flatten
-CURVE_META = {}
-for fam, d in CURVES.items():
-    for nm, spec in d.items():
-        CURVE_META[nm] = {"family": fam, **spec}
-
-ALL_CURVES = sorted(CURVE_META.keys())
+st.caption("""
+This is a benchmarking time-study on a linear vibratory feeder. Objects of different weights are placed on each brush and timed over a fixed travel distance.
+Measured time is converted to velocity, and object load is expressed as pressure (lb/in²). The purpose is not just “speed”, but understanding how stable/robust
+each brush is as load increases (how gracefully performance degrades and where it transitions toward stall).
+""")
 
 # =========================
-# Math helpers
+# Data Load
 # =========================
-def cubic_eval(x: float, c: dict) -> float:
-    return c["a0"] + c["a1"] * x + c["a2"] * (x**2) + c["a3"] * (x**3)
+csv_path = "data/velocity_data.csv"
+poly_degree = 3  # cubic
+line_width = 2   # fixed line width
 
-def cubic_d1(x: float, c: dict) -> float:
-    # dy/dx = a1 + 2*a2*x + 3*a3*x^2
-    return c["a1"] + 2.0 * c["a2"] * x + 3.0 * c["a3"] * (x**2)
+if not os.path.exists(csv_path):
+    st.error(f"No CSV found at `{csv_path}`. Please place your file there.")
+    st.stop()
 
-def cubic_d2(x: float, c: dict) -> float:
-    # d2y/dx2 = 2*a2 + 6*a3*x
-    return 2.0 * c["a2"] + 6.0 * c["a3"] * x
+df = pd.read_csv(csv_path)
+df.columns = df.columns.str.strip()
 
-def stall_root(name: str) -> float | None:
-    """
-    Smallest real root >= domain_min where y=0.
-    Returns None if no such root exists.
-    """
-    spec = CURVE_META[name]
-    c = spec["coeffs"]
-    dom_lo = float(spec["domain_min"])
-
-    coeffs = [c["a3"], c["a2"], c["a1"], c["a0"]]
-    roots = np.roots(coeffs)
-
-    candidates = []
-    for r in roots:
-        if abs(r.imag) < 1e-8:
-            xr = float(r.real)
-            if xr >= dom_lo:
-                candidates.append(xr)
-
-    if not candidates:
-        return None
-    return float(min(candidates))
-
-def effective_domain(name: str) -> tuple[float, float]:
-    """
-    Domain is [domain_min, stall] so curves terminate at V=0 (when a stall root exists).
-    """
-    lo = float(CURVE_META[name]["domain_min"])
-    s = stall_root(name)
-    if s is None or not np.isfinite(s) or s <= lo:
-        # If a curve never crosses 0 mathematically, show a practical window.
-        # (You can change 3.5 to whatever you consider "full range".)
-        return lo, max(lo + 0.5, 3.5)
-    return lo, float(s)
+required_cols = ["Brush", "Pressure", "Velocity"]
+missing = [c for c in required_cols if c not in df.columns]
+if missing:
+    st.error(f"Missing required columns: {', '.join(missing)}")
+    st.stop()
 
 # =========================
-# Sidebar controls
+# Sidebar Controls
 # =========================
 st.sidebar.header("Controls")
 
-st.sidebar.subheader("Load bands (Pressure, lb/in²)")
+axis_choice = st.sidebar.radio(
+    "X-axis",
+    options=["Weight (lb)", "Pressure (lb/in²)"],
+    index=1  # default to Pressure since bands are pressure-based
+)
 
-use_bands = st.sidebar.checkbox("Show load bands", value=True)
+x_col = "Weight" if axis_choice.startswith("Weight") else "Pressure"
+x_units = "lb" if x_col == "Weight" else "lb/in²"
+
+if x_col not in df.columns:
+    st.error(f"Column '{x_col}' not found in the CSV. Available columns: {list(df.columns)}")
+    st.stop()
+
+# =========================
+# Load Bands (Pressure)
+# =========================
+st.sidebar.subheader("Load bands (Pressure, lb/in²)")
+use_bands = st.sidebar.checkbox("Show load bands (Pressure plots only)", value=True)
 
 P_normal_lo = st.sidebar.number_input("Normal band start", value=0.60, step=0.05)
-P_normal_hi = st.sidebar.number_input("Normal band end",   value=1.30, step=0.05)
+P_normal_hi = st.sidebar.number_input("Normal band end", value=1.30, step=0.05)
 
-P_trans_lo  = st.sidebar.number_input("Transient band start", value=1.30, step=0.05)
-P_trans_hi  = st.sidebar.number_input("Transient band end",   value=2.00, step=0.05)
+P_trans_lo = st.sidebar.number_input("Transient band start", value=1.30, step=0.05)
+P_trans_hi = st.sidebar.number_input("Transient band end", value=2.00, step=0.05)
 
-P_avoid_lo  = st.sidebar.number_input("Avoid band start", value=2.00, step=0.05)
-
-families = st.sidebar.multiselect("Families", options=["Angle", "XT"], default=["Angle", "XT"])
-available = [c for c in ALL_CURVES if CURVE_META[c]["family"] in families]
-if not available:
-    st.error("No curves selected. Choose at least one family.")
-    st.stop()
-
-curve_selection_mode = st.sidebar.radio("Curves to show", ["All in selected families", "Manual select"], index=0)
-if curve_selection_mode.startswith("Manual"):
-    curves_to_plot = st.sidebar.multiselect("Select curves", options=available, default=available)
-else:
-    curves_to_plot = available
-
-if not curves_to_plot:
-    st.error("No curves selected to plot.")
-    st.stop()
-
-st.sidebar.markdown("---")
-resolution = st.sidebar.slider("Resolution (points per curve)", 200, 2500, 1000, 100)
-show_stall_markers = st.sidebar.checkbox("Show stall markers", value=True)
-clamp_velocity = st.sidebar.checkbox("Clamp velocity below 0 to 0", value=True)
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("Derivative views")
-show_abs = st.sidebar.checkbox("Include |dV/dP| view", value=True)
-show_d2 = st.sidebar.checkbox("Include d²V/dP² view", value=False)
+P_avoid_lo = st.sidebar.number_input("Avoid band start", value=2.00, step=0.05)
 
 # =========================
-# Build plots
+# Helper functions
 # =========================
-tab_names = ["Velocity (V) vs Pressure (P)", "Derivative (dV/dP) vs P"]
-if show_abs:
-    tab_names.append("Sensitivity |dV/dP| vs P")
-if show_d2:
-    tab_names.append("2nd Derivative (d²V/dP²) vs P")
+def fit_poly_model(x, y, degree):
+    poly = PolynomialFeatures(degree=degree)
+    X_poly = poly.fit_transform(x.reshape(-1, 1))
+    model = LinearRegression().fit(X_poly, y)
 
-tabs = st.tabs(tab_names)
+    def f(x_scalar):
+        return float(model.predict(poly.transform(np.array([[x_scalar]])))[0])
 
-def add_pressure_bands(fig, x_col, show, Pn_lo, Pn_hi, Pt_lo, Pt_hi, Pa_lo):
-    """Add shaded load bands to Plotly figure when x-axis is Pressure."""
+    return f
+
+def safe_quad(func, a, b):
+    if a == b:
+        return 0.0
+    lo, hi = min(a, b), max(a, b)
+    val, _ = quad(func, lo, hi)
+    return val
+
+def common_domain(x1, x2):
+    xmin = float(max(np.nanmin(x1), np.nanmin(x2)))
+    xmax = float(min(np.nanmax(x1), np.nanmax(x2)))
+    if xmax < xmin:
+        raise ValueError("No overlapping domain between the two selected brushes.")
+    return xmin, xmax
+
+def clipped(func, lo, hi):
+    def g(x):
+        if x < lo:
+            x = lo
+        if x > hi:
+            x = hi
+        return func(x)
+    return g
+
+def add_pressure_bands(fig, x_col, show, x_max, Pn_lo, Pn_hi, Pt_lo, Pt_hi, Pa_lo):
+    """
+    Add shaded load bands to Plotly figure when x-axis is Pressure.
+    x_max should be the max x shown on the plot so the 'Avoid' band can extend to the edge.
+    """
     if (not show) or (x_col != "Pressure"):
         return fig
 
@@ -194,15 +138,9 @@ def add_pressure_bands(fig, x_col, show, Pn_lo, Pn_hi, Pt_lo, Pt_hi, Pa_lo):
         annotation_font_size=11
     )
 
-    # Avoid band (red) — extend to right edge of plot automatically
-    xmax = fig.layout.xaxis.range[1] if fig.layout.xaxis.range else None
-    if xmax is None:
-        # if range isn't explicitly set, use current data max
-        # (Plotly will still shade reasonably even if xmax isn't perfect)
-        xmax = Pa_lo + 10
-
+    # Avoid band (red) — extend to the plotted max
     fig.add_vrect(
-        x0=Pa_lo, x1=xmax,
+        x0=Pa_lo, x1=float(x_max),
         fillcolor="rgba(255, 0, 0, 0.08)",
         line_width=0,
         layer="below",
@@ -213,112 +151,216 @@ def add_pressure_bands(fig, x_col, show, Pn_lo, Pn_hi, Pt_lo, Pt_hi, Pa_lo):
 
     return fig
 
-def make_fig(title: str, y_title: str):
-    fig = go.Figure()
-    fig.update_layout(
-        title=title,
-        xaxis_title="Pressure (lb/in²)",
-        yaxis_title=y_title,
-        height=720,
-        hovermode="x",
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.72),
-        xaxis=dict(
-            showspikes=True, spikemode="across", spikesnap="cursor",
-            showline=True, spikecolor="lightgray", spikethickness=0.7, spikedash="dot",
-            showgrid=True, gridcolor="rgba(220,220,220,0.4)"
-        ),
-        yaxis=dict(
-            showspikes=True, spikemode="across", spikesnap="cursor",
-            showline=True, spikecolor="lightgray", spikethickness=0.7, spikedash="dot",
-            showgrid=True, gridcolor="rgba(220,220,220,0.4)"
-        ),
+# =========================
+# Prep data (AngleOn™ vs Competitor baseline)
+# =========================
+angleon = df[df["Brush"].str.strip() == "AngleOn™"].copy()
+competitor = df[df["Brush"].str.strip() == "Competitor"].copy()
+
+if angleon.empty or competitor.empty:
+    st.error("Need rows for both 'AngleOn™' and 'Competitor' in the CSV.")
+    st.stop()
+
+x_angleon = angleon[x_col].to_numpy(dtype=float)
+y_angleon = angleon["Velocity"].to_numpy(dtype=float)
+
+x_comp = competitor[x_col].to_numpy(dtype=float)
+y_comp = competitor["Velocity"].to_numpy(dtype=float)
+
+f_angleon = fit_poly_model(x_angleon, y_angleon, degree=poly_degree)
+f_comp = fit_poly_model(x_comp, y_comp, degree=poly_degree)
+
+try:
+    xmin_common, xmax_common = common_domain(x_angleon, x_comp)
+except ValueError as e:
+    st.error(str(e))
+    st.stop()
+
+f_angleon_c = clipped(f_angleon, xmin_common, xmax_common)
+f_comp_c = clipped(f_comp, xmin_common, xmax_common)
+
+def diff(x):
+    return f_angleon_c(x) - f_comp_c(x)
+
+# =========================
+# Range selection
+# =========================
+st.sidebar.markdown("---")
+full_range = float(xmax_common - xmin_common)
+step_val = max(full_range / 200.0, 0.001)
+
+low_val, high_val = st.sidebar.slider(
+    f"Analysis range ({x_units})",
+    min_value=float(xmin_common),
+    max_value=float(xmax_common),
+    value=(float(xmin_common), float(xmax_common)),
+    step=float(step_val),
+)
+
+# =========================
+# Relative / Point Advantage
+# =========================
+if abs(high_val - low_val) <= 1e-12:
+    x0 = float(low_val)
+    fa, fc = f_angleon_c(x0), f_comp_c(x0)
+    point_advantage = (fa - fc) / fc * 100.0 if fc != 0 else np.nan
+    st.metric(
+        f"Point Advantage at {x0:.2f} {x_units}",
+        f"{point_advantage:.1f}%" if np.isfinite(point_advantage) else "—"
     )
-    return fig
+else:
+    lo, hi = float(min(low_val, high_val)), float(max(low_val, high_val))
+    area_diff = safe_quad(diff, lo, hi)
+    area_comp = safe_quad(lambda _x: f_comp_c(_x), lo, hi)
+    rel_adv = (area_diff / area_comp * 100.0) if area_comp != 0 else 0.0
+    st.metric(f"Relative Advantage [{lo:.2f}–{hi:.2f}] {x_units}", f"{rel_adv:.1f}%")
 
-def add_curve(fig, name: str, y_func, y_label: str):
-    c = CURVE_META[name]["coeffs"]
-    lo, hi = effective_domain(name)
-    xs = np.linspace(lo, hi, int(resolution))
+# =========================
+# Plot
+# =========================
+x_range = np.linspace(xmin_common, xmax_common, 400)
+angleon_fit = np.array([f_angleon_c(x) for x in x_range])
+comp_fit = np.array([f_comp_c(x) for x in x_range])
 
-    ys = np.array([y_func(x, c) for x in xs])
+fig = go.Figure()
 
-    if y_label == "V" and clamp_velocity:
-        ys = np.maximum(0.0, ys)
-
+# Highlight range (if interval)
+if abs(high_val - low_val) > 1e-12:
+    mask = (x_range >= low_val) & (x_range <= high_val)
+    if np.any(mask):
+        xf = np.concatenate([x_range[mask], x_range[mask][::-1]])
+        yf = np.concatenate([angleon_fit[mask], comp_fit[mask][::-1]])
+        fig.add_trace(go.Scatter(
+            x=xf, y=yf,
+            fill="toself",
+            fillcolor="rgba(150,150,150,0.25)",
+            line=dict(color="rgba(0,0,0,0)"),
+            hoverinfo="skip",
+            name="Analysis window"
+        ))
+else:
+    x0 = float(low_val)
+    y_mid = (f_angleon_c(x0) + f_comp_c(x0)) / 2.0
     fig.add_trace(go.Scatter(
-        x=xs, y=ys, mode="lines", name=name,
-        hovertemplate="P=%{x:.3f} lb/in²<br>"
-                      f"{y_label}=%{{y:.4f}}"
-                      "<extra>"+name+"</extra>"
+        x=[x0], y=[y_mid],
+        mode="markers",
+        name=f"Point @ {x0:.2f} {x_units}",
+        marker=dict(size=10),
+        hoverinfo="skip"
     ))
 
-    if show_stall_markers and y_label == "V":
-        s = stall_root(name)
-        if s is not None and np.isfinite(s):
-            fig.add_trace(go.Scatter(
-                x=[s], y=[0],
-                mode="markers",
-                marker=dict(size=9, symbol="x"),
-                showlegend=False,
-                hovertemplate=f"{name}<br>stall<br>P={s:.3f} lb/in²<br>V=0<extra></extra>",
-            ))
+# Lines
+fig.add_trace(go.Scatter(
+    x=x_range, y=angleon_fit,
+    mode="lines",
+    name="AngleOn™ cubic fit",
+    line=dict(width=line_width, color="blue"),
+))
+fig.add_trace(go.Scatter(
+    x=x_range, y=comp_fit,
+    mode="lines",
+    name="Competitor cubic fit",
+    line=dict(width=line_width, color="red"),
+))
 
-# --- Velocity plot
-with tabs[0]:
-    figV = make_fig("Velocity vs Pressure (cubic fits, extended to stall)", "Velocity (in/s)")
-    for nm in curves_to_plot:
-        add_curve(figV, nm, cubic_eval, "V")
-    st.plotly_chart(figV, use_container_width=True)
+fig.update_layout(
+    xaxis_title=f"{x_col} ({x_units})",
+    yaxis_title="Velocity (in/sec)",
+    height=650,
+    hovermode="x",
+    legend=dict(
+        yanchor="top", y=0.99,
+        xanchor="left", x=0.72
+    ),
+    xaxis=dict(
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        showline=True,
+        spikecolor="lightgray",
+        spikethickness=0.7,
+        spikedash="dot",
+        showgrid=True,
+        gridcolor="rgba(220,220,220,0.4)"
+    ),
+    yaxis=dict(
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        showline=True,
+        spikecolor="lightgray",
+        spikethickness=0.7,
+        spikedash="dot",
+        showgrid=True,
+        gridcolor="rgba(220,220,220,0.4)"
+    ),
+    hoverlabel=dict(
+        bgcolor="rgba(0,0,0,0)",
+        font_size=12,
+        font_family="Arial"
+    )
+)
 
-# --- First derivative plot
-with tabs[1]:
-    figD1 = make_fig("dV/dP vs Pressure (slope / sensitivity)", "dV/dP  (in/s) per (lb/in²)")
-    for nm in curves_to_plot:
-        add_curve(figD1, nm, cubic_d1, "dV/dP")
-    st.plotly_chart(figD1, use_container_width=True)
+# Add shaded load bands if x-axis is Pressure
+fig = add_pressure_bands(
+    fig,
+    x_col=x_col,
+    show=use_bands,
+    x_max=float(np.nanmax(x_range)),
+    Pn_lo=P_normal_lo,
+    Pn_hi=P_normal_hi,
+    Pt_lo=P_trans_lo,
+    Pt_hi=P_trans_hi,
+    Pa_lo=P_avoid_lo,
+)
 
-# --- Absolute derivative plot
-tab_idx = 2
-if show_abs:
-    with tabs[tab_idx]:
-        figAbs = make_fig("|dV/dP| vs Pressure (robustness view)", "|dV/dP|  (in/s) per (lb/in²)")
-        for nm in curves_to_plot:
-            add_curve(figAbs, nm, lambda x, c: abs(cubic_d1(x, c)), "|dV/dP|")
-        st.plotly_chart(figAbs, use_container_width=True)
-    tab_idx += 1
+st.plotly_chart(fig, use_container_width=True)
 
-# --- Second derivative plot (optional)
-if show_d2:
-    with tabs[tab_idx]:
-        figD2 = make_fig("d²V/dP² vs Pressure (curvature / transitions)", "d²V/dP²")
-        for nm in curves_to_plot:
-            add_curve(figD2, nm, cubic_d2, "d²V/dP²")
-        st.plotly_chart(figD2, use_container_width=True)
+# Optional: show the band definitions under the plot (only meaningful for pressure view)
+if x_col == "Pressure":
+    st.caption(f"""
+**Load band lens (Pressure):**
+- **Normal:** {P_normal_lo:.2f} to {P_normal_hi:.2f} lb/in²
+- **Transient:** {P_trans_lo:.2f} to {P_trans_hi:.2f} lb/in²
+- **Avoid:** > {P_avoid_lo:.2f} lb/in² (brush-dependent; near-failure behavior)
+""")
 
 # =========================
-# Summary table (stall + worst sensitivity)
+# CSV Data (moved below chart)
 # =========================
-st.subheader("Quick Summary (per curve)")
+with st.expander("Show CSV data / object details", expanded=False):
+    col_a, col_b, col_c = st.columns([1.2, 1, 1])
+    brush_values = sorted(df["Brush"].dropna().unique().tolist())
+    default_brushes = [b for b in brush_values if b in ["AngleOn™", "Competitor"]]
 
-rows = []
-for nm in curves_to_plot:
-    c = CURVE_META[nm]["coeffs"]
-    lo, hi = effective_domain(nm)
-    xs = np.linspace(lo, hi, 1200)
-    v = np.maximum(0.0, np.array([cubic_eval(x, c) for x in xs])) if clamp_velocity else np.array([cubic_eval(x, c) for x in xs])
-    d1 = np.array([cubic_d1(x, c) for x in xs])
-    absd1 = np.abs(d1)
+    with col_a:
+        selected_brushes = st.multiselect(
+            "Filter: Brush",
+            options=brush_values,
+            default=default_brushes
+        )
+    with col_b:
+        sort_by = st.selectbox("Sort by", options=list(df.columns))
+    with col_c:
+        ascending = st.checkbox("Ascending sort", value=True)
 
-    s = stall_root(nm)
-    rows.append({
-        "Curve": nm,
-        "Family": CURVE_META[nm]["family"],
-        "Min P": round(lo, 3),
-        "Stall P (V=0)": round(float(s), 3) if s is not None and np.isfinite(s) else "",
-        "Max V": round(float(np.nanmax(v)), 3),
-        "Min V": round(float(np.nanmin(v)), 3),
-        "Worst |dV/dP|": round(float(np.nanmax(absd1)), 3),
-        "Avg |dV/dP|": round(float(np.nanmean(absd1)), 3),
-    })
+    df_view = df[df["Brush"].isin(selected_brushes)].copy() if selected_brushes else df.copy()
 
-st.dataframe(rows, use_container_width=True, height=360)
+    q = st.text_input("Quick search (matches text columns)", "")
+    if q:
+        text_cols = [c for c in df_view.columns if df_view[c].dtype == "object"]
+        if text_cols:
+            mask = False
+            for c in text_cols:
+                mask = mask | df_view[c].astype(str).str.contains(q, case=False, na=False)
+            df_view = df_view[mask]
+
+    df_view = df_view.sort_values(sort_by, ascending=ascending)
+    st.dataframe(df_view, use_container_width=True, height=350)
+
+    st.download_button(
+        "Download filtered CSV",
+        data=df_view.to_csv(index=False).encode("utf-8"),
+        file_name="velocity_data_filtered.csv",
+        mime="text/csv"
+    )
