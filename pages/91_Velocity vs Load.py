@@ -25,7 +25,7 @@ CURVES = {
     "Angle": {
         "AngleOn™": {
             "coeffs": {"a0": 4.5210, "a1": -3.9740, "a2": 1.9270, "a3": -0.3569},
-            "domain_min": 0.167,
+            "domain_min": 0.166,
             "notes": "AngleOn™ cubic fit",
         },
         "Competitor": {
@@ -36,7 +36,7 @@ CURVES = {
     },
     "XT": {
         "XT10250-625 Rev.1": {
-            "coeffs": {"a0": 6.2710, "a1": -12.0900, "a2": 13.5200, "a3": -5.0130},
+            "coeffs": {"a0": 4.5179, "a1": -4.1600, "a2": 3.8293, "a3": -1.6427},
             "domain_min": 0.166,
             "notes": "XT10250-625 Rev.1 cubic fit",
         },
