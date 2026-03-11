@@ -1,58 +1,76 @@
 import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
+from scipy.integrate import quad
 
 # =========================
 # Page Setup
 # =========================
-st.set_page_config(page_title="Velocity Curves & Derivatives", layout="wide")
-st.title("Velocity Curves & Derivatives — Cubic Fits")
+st.set_page_config(page_title="Velocity vs Load", layout="wide")
+st.title("Velocity vs Load — AngleOn™ & AngleOn XT")
 st.caption(
-    "This page visualizes cubic velocity–pressure models and their derivatives. "
-    "Domains are automatically extended from minimum valid pressure to stall (V=0) so curves naturally terminate at zero."
+    "Objects of varying mass were conveyed along a linear vibratory feeder using different brush constructions. " 
+    "Object velocity was measured as a function of applied normal load (pressure), and cubic regression models were used to "
+    "describe velocity–load behavior up to stall (V = 0)."
 )
 
 # =========================
-# Curve Registry
+# Curve Registry (Pressure-based)
 # y = a0 + a1*x + a2*x^2 + a3*x^3
 # x = Pressure (lb/in²)
 # y = Velocity (in/s)
-# domain_min = minimum valid x
+# domain_min = minimum valid x (per your Desmos constraints)
 # =========================
 CURVES = {
     "Angle": {
         "AngleOn™": {
             "coeffs": {"a0": 4.5210, "a1": -3.9740, "a2": 1.9270, "a3": -0.3569},
             "domain_min": 0.167,
+            "notes": "AngleOn™ cubic fit",
         },
         "Competitor": {
             "coeffs": {"a0": 3.0780, "a1": -2.4730, "a2": 1.3470, "a3": -0.2774},
             "domain_min": 0.166,
+            "notes": "Competitor cubic fit",
         },
     },
     "XT": {
-        "XT10-250 Rev.1": {
+        "XT10250-625 Rev.1": {
             "coeffs": {"a0": 6.2710, "a1": -12.0900, "a2": 13.5200, "a3": -5.0130},
             "domain_min": 0.166,
+            "notes": "XT10250-625 Rev.1 cubic fit",
         },
-        "XT16-125 Rev.1": {
+        "XT10250-250 Rev.1": {
             "coeffs": {"a0": 3.3280, "a1": -2.1110, "a2": 1.1840, "a3": -0.2386},
             "domain_min": 0.166,
+            "notes": "XT10250-250 Rev.1 cubic fit",
         },
-        "XT16-125 Rev.2": {
+        "XT06250-250 Rev.1": {
+            "coeffs": {"a0": 3.9049, "a1": -7.1959, "a2": 6.2119, "a3": -1.8053},
+            "domain_min": 0.166,
+            "notes": "XT06250-250 Rev.1 cubic fit",
+        },
+        "XT16125-625 Rev.1": {
+            "coeffs": {"a0": 3.3280, "a1": -2.1110, "a2": 1.1840, "a3": -0.2386},
+            "domain_min": 0.166,
+            "notes": "XT16125-625 Rev.1 cubic fit",
+        },
+        "XT16125-625 Rev.2": {
             "coeffs": {"a0": 3.4984, "a1": -6.0848, "a2": 5.3119, "a3": -1.5377},
             "domain_min": 0.166,
+            "notes": "XT16125-625 Rev.2 cubic fit",
         },
-        "XT16-115 Rev.1": {
+        "XT16115-625 Rev.1": {
             "coeffs": {"a0": 3.3025, "a1": -5.8152, "a2": 4.8504, "a3": -1.3582},
             "domain_min": 0.166,
+            "notes": "XT16115-625 Rev.1 cubic fit",
         },
-        "XT16-105 Rev.1": {  # removed "Projected" per your earlier request
+        # renamed: removed "(Projected)" per your request
+        "XT16105-625 Rev.1": {
             "coeffs": {"a0": 3.1066, "a1": -5.5456, "a2": 4.3889, "a3": -1.1787},
             "domain_min": 0.166,
+            "notes": "XT16105-625 Rev.1 cubic fit",
         },
-        # Add additional curves here as needed:
-        # "XT16-XXX Rev.X": {"coeffs": {...}, "domain_min": 0.166},
     },
 }
 
@@ -65,28 +83,21 @@ for fam, d in CURVES.items():
 ALL_CURVES = sorted(CURVE_META.keys())
 
 # =========================
-# Math helpers
+# Helpers
 # =========================
 def cubic_eval(x: float, c: dict) -> float:
     return c["a0"] + c["a1"] * x + c["a2"] * (x**2) + c["a3"] * (x**3)
 
-def cubic_d1(x: float, c: dict) -> float:
-    # dy/dx = a1 + 2*a2*x + 3*a3*x^2
-    return c["a1"] + 2.0 * c["a2"] * x + 3.0 * c["a3"] * (x**2)
-
-def cubic_d2(x: float, c: dict) -> float:
-    # d2y/dx2 = 2*a2 + 6*a3*x
-    return 2.0 * c["a2"] + 6.0 * c["a3"] * x
-
 def stall_root(name: str) -> float | None:
     """
-    Smallest real root >= domain_min where y=0.
+    Smallest real root >= domain_min where V(P)=0.
     Returns None if no such root exists.
     """
     spec = CURVE_META[name]
     c = spec["coeffs"]
     dom_lo = float(spec["domain_min"])
 
+    # a3*x^3 + a2*x^2 + a1*x + a0 = 0
     coeffs = [c["a3"], c["a2"], c["a1"], c["a0"]]
     roots = np.roots(coeffs)
 
@@ -103,222 +114,249 @@ def stall_root(name: str) -> float | None:
 
 def effective_domain(name: str) -> tuple[float, float]:
     """
-    Domain is [domain_min, stall] so curves terminate at V=0 (when a stall root exists).
+    Domain is [domain_min, stall], so curves always extend to y=0.
+    If no stall root exists, we fall back to a reasonable max window.
     """
-    lo = float(CURVE_META[name]["domain_min"])
+    dom_lo = float(CURVE_META[name]["domain_min"])
     s = stall_root(name)
-    if s is None or not np.isfinite(s) or s <= lo:
-        # If a curve never crosses 0 mathematically, show a practical window.
-        # (You can change 3.5 to whatever you consider "full range".)
-        return lo, max(lo + 0.5, 3.5)
-    return lo, float(s)
+    if s is None or not np.isfinite(s):
+        # fallback: show a bit beyond typical range
+        return dom_lo, max(dom_lo + 0.5, 3.5)
+    # Guard: if numerical issues produce stall <= dom_lo, keep a tiny range
+    if s <= dom_lo:
+        return dom_lo, dom_lo + 0.05
+    return dom_lo, float(s)
+
+def safe_quad(func, a, b) -> float:
+    if a == b:
+        return 0.0
+    lo, hi = min(a, b), max(a, b)
+    val, _ = quad(func, lo, hi)
+    return float(val)
+
+def fmt_equation(name: str) -> str:
+    c = CURVE_META[name]["coeffs"]
+    return (
+        f"V = {c['a0']:.4f} + ({c['a1']:.4f})·P + ({c['a2']:.4f})·P² + ({c['a3']:.4f})·P³"
+    )
 
 # =========================
-# Sidebar controls
+# Sidebar Controls
 # =========================
 st.sidebar.header("Controls")
 
-st.sidebar.subheader("Load bands (Pressure, lb/in²)")
+mode = st.sidebar.radio(
+    "Mode",
+    options=["Overview (many curves)", "Compare (A vs B)"],
+    index=0
+)
 
-use_bands = st.sidebar.checkbox("Show load bands", value=True)
+family_filter = st.sidebar.multiselect(
+    "Families",
+    options=["Angle", "XT"],
+    default=["Angle", "XT"]
+)
 
-P_normal_lo = st.sidebar.number_input("Normal band start", value=0.60, step=0.05)
-P_normal_hi = st.sidebar.number_input("Normal band end",   value=1.30, step=0.05)
-
-P_trans_lo  = st.sidebar.number_input("Transient band start", value=1.30, step=0.05)
-P_trans_hi  = st.sidebar.number_input("Transient band end",   value=2.00, step=0.05)
-
-P_avoid_lo  = st.sidebar.number_input("Avoid band start", value=2.00, step=0.05)
-
-families = st.sidebar.multiselect("Families", options=["Angle", "XT"], default=["Angle", "XT"])
-available = [c for c in ALL_CURVES if CURVE_META[c]["family"] in families]
-if not available:
-    st.error("No curves selected. Choose at least one family.")
+selected_curves = [c for c in ALL_CURVES if CURVE_META[c]["family"] in family_filter]
+if not selected_curves:
+    st.error("No curves selected — choose at least one family.")
     st.stop()
 
-curve_selection_mode = st.sidebar.radio("Curves to show", ["All in selected families", "Manual select"], index=0)
-if curve_selection_mode.startswith("Manual"):
-    curves_to_plot = st.sidebar.multiselect("Select curves", options=available, default=available)
+# plotting controls
+st.sidebar.markdown("---")
+st.sidebar.subheader("Plot Quality")
+n_points = st.sidebar.slider("Resolution (points per curve)", 200, 2000, 900, 100)
+
+show_stall_markers = st.sidebar.checkbox("Show stall markers (V=0)", value=True)
+show_equations = st.sidebar.checkbox("Show equation details", value=False)
+
+# =========================
+# Compare controls
+# =========================
+curve_a = curve_b = None
+low_val = high_val = None
+xmin_common = xmax_common = None
+
+if mode.startswith("Compare"):
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Comparison")
+
+    # defaults
+    default_a = "AngleOn™" if "AngleOn™" in selected_curves else selected_curves[0]
+    default_b = "Competitor" if "Competitor" in selected_curves else (selected_curves[1] if len(selected_curves) > 1 else selected_curves[0])
+
+    curve_a = st.sidebar.selectbox("Curve A", options=selected_curves, index=selected_curves.index(default_a))
+    curve_b = st.sidebar.selectbox("Curve B", options=selected_curves, index=selected_curves.index(default_b))
+
+    if curve_a == curve_b:
+        st.sidebar.warning("Choose two different curves to compare.")
+
+    # common domain for analysis: overlap of the two *effective* domains
+    a_lo, a_hi = effective_domain(curve_a)
+    b_lo, b_hi = effective_domain(curve_b)
+    xmin_common = max(a_lo, b_lo)
+    xmax_common = min(a_hi, b_hi)
+
+    if xmax_common <= xmin_common:
+        st.error("No overlapping domain between A and B (after extending to stall).")
+        st.stop()
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Analysis Window (overlap)")
+    step_val = max((xmax_common - xmin_common) / 200.0, 0.001)
+    low_val, high_val = st.sidebar.slider(
+        "Pressure range (lb/in²)",
+        min_value=float(xmin_common),
+        max_value=float(xmax_common),
+        value=(float(xmin_common), float(xmax_common)),
+        step=float(step_val),
+    )
+
+# =========================
+# Advantage (Compare)
+# =========================
+if mode.startswith("Compare"):
+    st.subheader("Advantage (Model Curves)")
+
+    cA = CURVE_META[curve_a]["coeffs"]
+    cB = CURVE_META[curve_b]["coeffs"]
+
+    def fA(x): return max(0.0, cubic_eval(float(x), cA))
+    def fB(x): return max(0.0, cubic_eval(float(x), cB))
+    def diff(x): return fA(x) - fB(x)
+
+    if abs(high_val - low_val) <= 1e-12:
+        x0 = float(low_val)
+        ya, yb = fA(x0), fB(x0)
+        point_adv = (ya - yb) / yb * 100.0 if yb != 0 else np.nan
+        st.metric(
+            f"Point Advantage: {curve_a} vs {curve_b} @ {x0:.3f} lb/in²",
+            f"{point_adv:.1f}%" if np.isfinite(point_adv) else "—",
+        )
+    else:
+        lo, hi = float(min(low_val, high_val)), float(max(low_val, high_val))
+        area_diff = safe_quad(diff, lo, hi)
+        area_b = safe_quad(lambda _x: fB(_x), lo, hi)
+        rel_adv = (area_diff / area_b * 100.0) if area_b != 0 else 0.0
+        st.metric(
+            f"Relative Advantage: {curve_a} vs {curve_b} [{lo:.3f}–{hi:.3f}] lb/in²",
+            f"{rel_adv:.1f}%",
+        )
+
+# =========================
+# Plot
+# =========================
+st.subheader("Velocity vs Object Pressure")
+
+fig = go.Figure()
+
+# Analysis shading for compare mode (built from A & B over overlap)
+if mode.startswith("Compare") and abs(high_val - low_val) > 1e-12:
+    cA = CURVE_META[curve_a]["coeffs"]
+    cB = CURVE_META[curve_b]["coeffs"]
+    xs = np.linspace(xmin_common, xmax_common, 700)
+    yA = np.array([max(0.0, cubic_eval(x, cA)) for x in xs])
+    yB = np.array([max(0.0, cubic_eval(x, cB)) for x in xs])
+
+    mask = (xs >= low_val) & (xs <= high_val)
+    if np.any(mask):
+        xf = np.concatenate([xs[mask], xs[mask][::-1]])
+        yf = np.concatenate([yA[mask], yB[mask][::-1]])
+        fig.add_trace(go.Scatter(
+            x=xf, y=yf,
+            fill="toself",
+            fillcolor="rgba(150,150,150,0.22)",
+            line=dict(color="rgba(0,0,0,0)"),
+            hoverinfo="skip",
+            name="Analysis window"
+        ))
+
+# Curves to plot
+if mode.startswith("Overview"):
+    plot_curves = selected_curves
 else:
-    curves_to_plot = available
+    plot_curves = sorted(set(selected_curves) | {curve_a, curve_b})
 
-if not curves_to_plot:
-    st.error("No curves selected to plot.")
-    st.stop()
+# Plot each curve from domain_min to stall
+for nm in plot_curves:
+    c = CURVE_META[nm]["coeffs"]
+    lo, hi = effective_domain(nm)
 
-st.sidebar.markdown("---")
-resolution = st.sidebar.slider("Resolution (points per curve)", 200, 2500, 1000, 100)
-show_stall_markers = st.sidebar.checkbox("Show stall markers", value=True)
-clamp_velocity = st.sidebar.checkbox("Clamp velocity below 0 to 0", value=True)
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("Derivative views")
-show_abs = st.sidebar.checkbox("Include |dV/dP| view", value=True)
-show_d2 = st.sidebar.checkbox("Include d²V/dP² view", value=False)
-
-# =========================
-# Build plots
-# =========================
-tab_names = ["Velocity (V) vs Pressure (P)", "Derivative (dV/dP) vs P"]
-if show_abs:
-    tab_names.append("Sensitivity |dV/dP| vs P")
-if show_d2:
-    tab_names.append("2nd Derivative (d²V/dP²) vs P")
-
-tabs = st.tabs(tab_names)
-
-def add_pressure_bands(fig, x_col, show, Pn_lo, Pn_hi, Pt_lo, Pt_hi, Pa_lo):
-    """Add shaded load bands to Plotly figure when x-axis is Pressure."""
-    if (not show) or (x_col != "Pressure"):
-        return fig
-
-    # Normal band (green)
-    fig.add_vrect(
-        x0=Pn_lo, x1=Pn_hi,
-        fillcolor="rgba(0, 200, 0, 0.14)",
-        line_width=0,
-        layer="below",
-        annotation_text="Normal",
-        annotation_position="top left",
-        annotation_font_size=11
-    )
-
-    # Transient band (yellow)
-    fig.add_vrect(
-        x0=Pt_lo, x1=Pt_hi,
-        fillcolor="rgba(255, 215, 0, 0.14)",
-        line_width=0,
-        layer="below",
-        annotation_text="Transient",
-        annotation_position="top left",
-        annotation_font_size=11
-    )
-
-    # Avoid band (red) — extend to right edge of plot automatically
-    xmax = fig.layout.xaxis.range[1] if fig.layout.xaxis.range else None
-    if xmax is None:
-        # if range isn't explicitly set, use current data max
-        # (Plotly will still shade reasonably even if xmax isn't perfect)
-        xmax = Pa_lo + 10
-
-    fig.add_vrect(
-        x0=Pa_lo, x1=xmax,
-        fillcolor="rgba(255, 0, 0, 0.08)",
-        line_width=0,
-        layer="below",
-        annotation_text="Avoid",
-        annotation_position="top left",
-        annotation_font_size=11
-    )
-
-    return fig
-
-def make_fig(title: str, y_title: str):
-    fig = go.Figure()
-    fig.update_layout(
-        title=title,
-        xaxis_title="Pressure (lb/in²)",
-        yaxis_title=y_title,
-        height=720,
-        hovermode="x",
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.72),
-        xaxis=dict(
-            showspikes=True, spikemode="across", spikesnap="cursor",
-            showline=True, spikecolor="lightgray", spikethickness=0.7, spikedash="dot",
-            showgrid=True, gridcolor="rgba(220,220,220,0.4)"
-        ),
-        yaxis=dict(
-            showspikes=True, spikemode="across", spikesnap="cursor",
-            showline=True, spikecolor="lightgray", spikethickness=0.7, spikedash="dot",
-            showgrid=True, gridcolor="rgba(220,220,220,0.4)"
-        ),
-    )
-    return fig
-
-def add_curve(fig, name: str, y_func, y_label: str):
-    c = CURVE_META[name]["coeffs"]
-    lo, hi = effective_domain(name)
-    xs = np.linspace(lo, hi, int(resolution))
-
-    ys = np.array([y_func(x, c) for x in xs])
-
-    if y_label == "V" and clamp_velocity:
-        ys = np.maximum(0.0, ys)
+    xs = np.linspace(lo, hi, int(n_points))
+    ys = np.array([max(0.0, cubic_eval(x, c)) for x in xs])
 
     fig.add_trace(go.Scatter(
-        x=xs, y=ys, mode="lines", name=name,
-        hovertemplate="P=%{x:.3f} lb/in²<br>"
-                      f"{y_label}=%{{y:.4f}}"
-                      "<extra>"+name+"</extra>"
+        x=xs, y=ys,
+        mode="lines",
+        name=nm,
+        line=dict(width=2),
+        hovertemplate="P=%{x:.3f} lb/in²<br>V=%{y:.3f} in/s<extra>"+nm+"</extra>"
     ))
 
-    if show_stall_markers and y_label == "V":
-        s = stall_root(name)
+    if show_stall_markers:
+        s = stall_root(nm)
         if s is not None and np.isfinite(s):
             fig.add_trace(go.Scatter(
                 x=[s], y=[0],
                 mode="markers",
                 marker=dict(size=9, symbol="x"),
-                showlegend=False,
-                hovertemplate=f"{name}<br>stall<br>P={s:.3f} lb/in²<br>V=0<extra></extra>",
+                name=f"{nm} stall",
+                hovertemplate=f"{nm}<br>stall<br>P={s:.3f} lb/in²<br>V=0<extra></extra>",
+                showlegend=False
             ))
 
-# --- Velocity plot
-with tabs[0]:
-    figV = make_fig("Velocity vs Pressure (cubic fits, extended to stall)", "Velocity (in/s)")
-    for nm in curves_to_plot:
-        add_curve(figV, nm, cubic_eval, "V")
-    st.plotly_chart(figV, use_container_width=True)
+fig.update_layout(
+    xaxis_title="Pressure (lb/in²)",
+    yaxis_title="Velocity (in/s)",
+    height=720,
+    hovermode="x",
+    legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.72),
+    xaxis=dict(
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        showline=True,
+        spikecolor="lightgray",
+        spikethickness=0.7,
+        spikedash="dot",
+        showgrid=True,
+        gridcolor="rgba(220,220,220,0.4)"
+    ),
+    yaxis=dict(
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        showline=True,
+        spikecolor="lightgray",
+        spikethickness=0.7,
+        spikedash="dot",
+        showgrid=True,
+        gridcolor="rgba(220,220,220,0.4)"
+    ),
+)
 
-# --- First derivative plot
-with tabs[1]:
-    figD1 = make_fig("dV/dP vs Pressure (slope / sensitivity)", "dV/dP  (in/s) per (lb/in²)")
-    for nm in curves_to_plot:
-        add_curve(figD1, nm, cubic_d1, "dV/dP")
-    st.plotly_chart(figD1, use_container_width=True)
-
-# --- Absolute derivative plot
-tab_idx = 2
-if show_abs:
-    with tabs[tab_idx]:
-        figAbs = make_fig("|dV/dP| vs Pressure (robustness view)", "|dV/dP|  (in/s) per (lb/in²)")
-        for nm in curves_to_plot:
-            add_curve(figAbs, nm, lambda x, c: abs(cubic_d1(x, c)), "|dV/dP|")
-        st.plotly_chart(figAbs, use_container_width=True)
-    tab_idx += 1
-
-# --- Second derivative plot (optional)
-if show_d2:
-    with tabs[tab_idx]:
-        figD2 = make_fig("d²V/dP² vs Pressure (curvature / transitions)", "d²V/dP²")
-        for nm in curves_to_plot:
-            add_curve(figD2, nm, cubic_d2, "d²V/dP²")
-        st.plotly_chart(figD2, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True)
 
 # =========================
-# Summary table (stall + worst sensitivity)
+# Equation Details
 # =========================
-st.subheader("Quick Summary (per curve)")
+if show_equations:
+    st.subheader("Curve Definitions")
+    with st.expander("Show equations and computed stall domains", expanded=True):
+        for nm in plot_curves:
+            spec = CURVE_META[nm]
+            dom_lo = spec["domain_min"]
+            s = stall_root(nm)
+            lo, hi = effective_domain(nm)
 
-rows = []
-for nm in curves_to_plot:
-    c = CURVE_META[nm]["coeffs"]
-    lo, hi = effective_domain(nm)
-    xs = np.linspace(lo, hi, 1200)
-    v = np.maximum(0.0, np.array([cubic_eval(x, c) for x in xs])) if clamp_velocity else np.array([cubic_eval(x, c) for x in xs])
-    d1 = np.array([cubic_d1(x, c) for x in xs])
-    absd1 = np.abs(d1)
-
-    s = stall_root(nm)
-    rows.append({
-        "Curve": nm,
-        "Family": CURVE_META[nm]["family"],
-        "Min P": round(lo, 3),
-        "Stall P (V=0)": round(float(s), 3) if s is not None and np.isfinite(s) else "",
-        "Max V": round(float(np.nanmax(v)), 3),
-        "Min V": round(float(np.nanmin(v)), 3),
-        "Worst |dV/dP|": round(float(np.nanmax(absd1)), 3),
-        "Avg |dV/dP|": round(float(np.nanmean(absd1)), 3),
-    })
-
-st.dataframe(rows, use_container_width=True, height=360)
+            st.markdown(f"**{nm}**  ·  Family: `{spec['family']}`")
+            st.code(fmt_equation(nm), language="text")
+            st.write(f"Minimum pressure: {dom_lo:.3f} lb/in²")
+            if s is None:
+                st.caption("No real stall root found; curve may not reach V=0 under this cubic.")
+            else:
+                st.write(f"Computed stall pressure (V=0): {s:.6f} lb/in²")
+            st.write(f"Plot domain used (no extrapolation): {lo:.3f} to {hi:.3f} lb/in²")
+            if spec.get("notes"):
+                st.caption(spec["notes"])
+            st.markdown("---")
